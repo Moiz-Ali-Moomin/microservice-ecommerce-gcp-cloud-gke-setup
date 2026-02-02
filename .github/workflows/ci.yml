@@ -41,17 +41,20 @@ jobs:
           cache: true
           cache-dependency-path: go.work.sum
 
+      # ✅ LINT: run at repo root, let go.work drive everything
       - name: GolangCI-Lint
         uses: golangci/golangci-lint-action@v6
         with:
           version: v1.60.3
-          args: --timeout=5m ./services/...
+          args: --timeout=5m --allow-parallel-runners
 
+      # ✅ TEST: run ONLY inside services (real modules)
       - name: Run Unit Tests
         run: |
-          go test -v -coverprofile=coverage.out ./services/... | tee test-report.out
+          cd services
+          go test -v -coverprofile=../coverage.out ./... | tee ../test-report.out
           go install github.com/mgechev/revive@latest
-          revive -formatter checkstyle ./services/... > lint-report.xml
+          revive -formatter checkstyle ./... > ../lint-report.xml
 
       - uses: actions/upload-artifact@v4
         with:
@@ -80,7 +83,9 @@ jobs:
           cache-dependency-path: go.work.sum
 
       - name: Compile Services
-        run: go build -v ./services/...
+        run: |
+          cd services
+          go build -v ./...
 
 # =====================================================
 # 2. SECURITY SCAN (FILESYSTEM)
