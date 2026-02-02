@@ -64,7 +64,7 @@ services:
       # Service URLs (Docker Compose DNS)
       - AUTH_SERVICE_URL=http://auth-service:8080
       - USER_SERVICE_URL=http://user-service:8080
-      - PRODUCT_SERVICE_URL=http://product-service:8080
+      - OFFER_SERVICE_URL=http://offer-service:8080
       - CART_SERVICE_URL=http://cart-service:8080
       - STOREFRONT_SERVICE_URL=http://storefront-service:8080
     depends_on:
@@ -280,6 +280,7 @@ services:
     ports:
       - "8095:8080"
     environment:
+      - PORT=8080
       - KAFKA_BROKERS=kafka:9092
     depends_on:
       kafka:

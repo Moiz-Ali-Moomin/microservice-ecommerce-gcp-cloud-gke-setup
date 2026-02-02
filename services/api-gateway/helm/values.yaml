@@ -1,6 +1,6 @@
 replicaCount: 2
 image:
-  repository: registry.gitlab.com/haxor/ecommerce-platform/api-gateway
+  repository: us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo/api-gateway
   tag: latest
 service:
   type: ClusterIP
