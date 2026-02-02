@@ -1,6 +1,6 @@
-FROM golang:1.24 as builder
+FROM golang:1.23 as builder
 WORKDIR /app
-# COPY go.work .
+# 
 COPY shared-lib shared-lib
 COPY user-service user-service
 RUN go work init ./shared-lib ./user-service
@@ -13,3 +13,4 @@ COPY --from=builder /app/user-service/user-service .
 USER 65532:65532
 EXPOSE 8080
 ENTRYPOINT ["/user-service"]
+

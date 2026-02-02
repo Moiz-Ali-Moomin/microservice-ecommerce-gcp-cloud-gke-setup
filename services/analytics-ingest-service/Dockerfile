@@ -1,4 +1,4 @@
-FROM golang:1.24 as builder
+FROM golang:1.23 as builder
 WORKDIR /app
 COPY shared-lib shared-lib
 COPY analytics-ingest-service analytics-ingest-service
@@ -11,3 +11,4 @@ COPY --from=builder /app/analytics-ingest-service/analytics-ingest-service .
 USER 65532:65532
 EXPOSE 8080
 ENTRYPOINT ["/analytics-ingest-service"]
+

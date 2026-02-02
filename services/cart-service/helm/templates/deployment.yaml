@@ -23,6 +23,7 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+
           livenessProbe:
             httpGet:
               path: /health
@@ -31,6 +32,7 @@ spec:
             periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 3
+
           readinessProbe:
             httpGet:
               path: /health
@@ -39,5 +41,11 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
+          env:
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

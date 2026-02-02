@@ -1,9 +1,9 @@
 # Builder
-FROM golang:1.24 as builder
+FROM golang:1.23 as builder
 WORKDIR /app
 COPY shared-lib shared-lib
 COPY storefront-service storefront-service
-RUN go work init ./storefront-service ./shared-lib
+RUN go work init ./shared-lib ./storefront-service
 RUN cd storefront-service && CGO_ENABLED=0 GOOS=linux go build -o storefront-service cmd/main.go
 
 # Runnable
@@ -15,3 +15,4 @@ COPY --from=builder /app/storefront-service/static ./static
 USER 65532:65532
 EXPOSE 3000
 ENTRYPOINT ["/storefront-service"]
+

@@ -1,0 +1,287 @@
+name: ecommerce-platform
+
+networks:
+  ecommerce-net:
+    driver: bridge
+
+services:
+  # ===============================================================
+  # INFRASTRUCTURE
+  # ===============================================================
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      # KRaft settings - Standard Kafka Env Vars (no CFG prefix)
+      - KAFKA_NODE_ID=0
+      - KAFKA_PROCESS_ROLES=controller,broker
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+    networks: [ ecommerce-net ]
+    healthcheck:
+      test: [ "CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --list" ]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+
+  kafka-init:
+    image: apache/kafka:3.7.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [ ecommerce-net ]
+    command: >
+      bash -c "
+        echo 'Waiting for Kafka...' &&
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --partitions 1 --replication-factor 1 --topic page.viewed &&
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --partitions 1 --replication-factor 1 --topic cta.clicked &&
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --partitions 1 --replication-factor 1 --topic checkout.redirected &&
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --partitions 1 --replication-factor 1 --topic conversion.completed &&
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --partitions 1 --replication-factor 1 --topic campaign.attributed &&
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --partitions 1 --replication-factor 1 --topic user.signup &&
+        /opt/kafka/bin/kafka-topics.sh --create --if-not-exists --bootstrap-server kafka:9092 --partitions 1 --replication-factor 1 --topic checkout.completed &&
+        echo 'Topics created!'
+      "
+
+  # ===============================================================
+  # GO MICROSERVICES
+  # ===============================================================
+  api-gateway:
+    build:
+      context: ./services
+      dockerfile: ./api-gateway/Dockerfile
+    image: ecommerce/api-gateway:local
+    ports:
+      - "8080:8080"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+      # Service URLs (Docker Compose DNS)
+      - AUTH_SERVICE_URL=http://auth-service:8080
+      - USER_SERVICE_URL=http://user-service:8080
+      - PRODUCT_SERVICE_URL=http://product-service:8080
+      - CART_SERVICE_URL=http://cart-service:8080
+      - STOREFRONT_SERVICE_URL=http://storefront-service:8080
+    depends_on:
+      kafka:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+    networks: [ ecommerce-net ]
+
+  auth-service:
+    build:
+      context: ./services
+      dockerfile: ./auth-service/Dockerfile
+    image: ecommerce/auth-service:local
+    ports:
+      - "8081:8080"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [ ecommerce-net ]
+
+  user-service:
+    build:
+      context: ./services
+      dockerfile: ./user-service/Dockerfile
+    image: ecommerce/user-service:local
+    ports:
+      - "8082:8080"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [ ecommerce-net ]
+
+  admin-backoffice-service:
+    build:
+      context: ./services
+      dockerfile: ./admin-backoffice-service/Dockerfile
+    image: ecommerce/admin-backoffice-service:local
+    ports:
+      - "8083:8080"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [ ecommerce-net ]
+
+  analytics-ingest-service:
+    build:
+      context: ./services
+      dockerfile: ./analytics-ingest-service/Dockerfile
+    image: ecommerce/analytics-ingest-service:local
+    ports:
+      - "8084:8080"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [ ecommerce-net ]
+
+  attribution-service:
+    build:
+      context: ./services
+      dockerfile: ./attribution-service/Dockerfile
+    image: ecommerce/attribution-service:local
+    ports:
+      - "8085:8080"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [ ecommerce-net ]
+
+  audit-service:
+    build:
+      context: ./services
+      dockerfile: ./audit-service/Dockerfile
+    image: ecommerce/audit-service:local
+    ports:
+      - "8086:8080"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [ ecommerce-net ]
+
+  cart-service:
+    build:
+      context: ./services
+      dockerfile: ./cart-service/Dockerfile
+    image: ecommerce/cart-service:local
+    ports:
+      - "8087:8080"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [ ecommerce-net ]
+
+  conversion-webhook:
+    build:
+      context: ./services
+      dockerfile: ./conversion-webhook/Dockerfile
+    image: ecommerce/conversion-webhook:local
+    ports:
+      - "8088:8080"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [ ecommerce-net ]
+
+  feature-flag-service:
+    build:
+      context: ./services
+      dockerfile: ./feature-flag-service/Dockerfile
+    image: ecommerce/feature-flag-service:local
+    ports:
+      - "8089:8080"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [ ecommerce-net ]
+
+  landing-service:
+    build:
+      context: ./services
+      dockerfile: ./landing-service/Dockerfile
+    image: ecommerce/landing-service:local
+    ports:
+      - "8090:8080"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [ ecommerce-net ]
+
+  notification-service:
+    build:
+      context: ./services
+      dockerfile: ./notification-service/Dockerfile
+    image: ecommerce/notification-service:local
+    ports:
+      - "8091:8080"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [ ecommerce-net ]
+
+  offer-service:
+    build:
+      context: ./services
+      dockerfile: ./offer-service/Dockerfile
+    image: ecommerce/offer-service:local
+    ports:
+      - "8092:8080"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [ ecommerce-net ]
+
+  redirect-service:
+    build:
+      context: ./services
+      dockerfile: ./redirect-service/Dockerfile
+    image: ecommerce/redirect-service:local
+    ports:
+      - "8093:8080"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [ ecommerce-net ]
+
+  reporting-service:
+    build:
+      context: ./services
+      dockerfile: ./reporting-service/Dockerfile
+    image: ecommerce/reporting-service:local
+    ports:
+      - "8094:8080"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [ ecommerce-net ]
+
+  storefront-service:
+    build:
+      context: ./services
+      dockerfile: ./storefront-service/Dockerfile
+    image: ecommerce/storefront-service:local
+    ports:
+      - "8095:8080"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [ ecommerce-net ]

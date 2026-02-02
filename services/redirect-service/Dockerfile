@@ -1,4 +1,4 @@
-FROM golang:1.24 as builder
+FROM golang:1.23 as builder
 WORKDIR /app
 COPY shared-lib shared-lib
 COPY redirect-service redirect-service
@@ -11,3 +11,4 @@ COPY --from=builder /app/redirect-service/redirect-service .
 USER 65532:65532
 EXPOSE 8080
 ENTRYPOINT ["/redirect-service"]
+

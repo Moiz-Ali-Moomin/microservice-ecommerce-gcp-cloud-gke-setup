@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/IBM/sarama"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/logger"
@@ -34,7 +35,25 @@ func (c *Consumer) Start(ctx context.Context) error {
 	config.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
 	config.Consumer.Offsets.Initial = sarama.OffsetOldest
 
-	consumer, err := sarama.NewConsumerGroup(c.brokers, c.groupID, config)
+	// Retry loop for connecting to Kafka
+	var consumer sarama.ConsumerGroup
+	var err error
+
+	for i := 0; i < 30; i++ { // Retry for ~60 seconds
+		consumer, err = sarama.NewConsumerGroup(c.brokers, c.groupID, config)
+		if err == nil {
+			break
+		}
+		logger.Log.Warn("Failed to create consumer group, retrying in 2s...", zap.Error(err))
+		time.Sleep(2 * time.Second)
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+	}
+
 	if err != nil {
 		return err
 	}
