@@ -1,6 +1,6 @@
 .PHONY: build test clean docker-build tidy list-services
 
-# Auto-discover service from go.work
+# Auto-discover services from go.work
 SERVICES := $(shell awk '/^\t\.\// {print $$1}' go.work | sed 's|./services/||')
 
 list-services:
