@@ -1,0 +1,10 @@
+# infra/airflow/values.yaml
+# Airflow Helm Values
+executor: KubernetesExecutor
+dags:
+  gitSync:
+    enabled: true
+    repo: "https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup.git"
+    branch: "main"
+    subPath: "infra/airflow/dags"
+

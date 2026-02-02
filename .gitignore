@@ -1,0 +1,45 @@
+# =========================
+# Terraform
+# =========================
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+
+# Terraform plans
+tfplan
+**/tfplan
+
+# Terraform local overrides
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Terraform CLI config
+.terraformrc
+terraform.rc
+
+# =========================
+# Environment files
+# =========================
+.env
+.env.*
+
+# =========================
+# Crash logs
+# =========================
+crash.log
+
+# =========================
+# OS / Editor junk
+# =========================
+.DS_Store
+.idea/
+.vscode/
+
+# =========================
+# Binary files
+# =========================
+*.exe

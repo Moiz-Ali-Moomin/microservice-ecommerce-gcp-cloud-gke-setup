@@ -1,0 +1,12 @@
+# infra/observability/tempo/values.yaml
+# Values for grafana/tempo
+persistence:
+  enabled: true
+  size: 10Gi
+storage:
+  trace:
+    backend: local # Use GCS in real prod
+    local:
+      path: /var/tempo/traces
+    wal:
+      path: /var/tempo/wal

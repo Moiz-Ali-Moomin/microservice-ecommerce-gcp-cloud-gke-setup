@@ -1,0 +1,39 @@
+# infra/gke/nodepools.yaml
+apiVersion: container.cnrm.cloud.google.com/v1beta1
+kind: ContainerNodePool
+metadata:
+  name: general-pool
+  namespace: config-control
+spec:
+  clusterRef:
+    name: ecommerce-platform-prod
+  location: us-central1
+  nodeConfig:
+    machineType: e2-standard-4
+    diskSizeGb: 100
+    oauthScopes:
+      - "https://www.googleapis.com/auth/cloud-platform"
+  autoscaling:
+    minNodeCount: 1
+    maxNodeCount: 5
+
+---
+apiVersion: container.cnrm.cloud.google.com/v1beta1
+kind: ContainerNodePool
+metadata:
+  name: analytics-pool
+  namespace: config-control
+spec:
+  clusterRef:
+    name: ecommerce-platform-prod
+  location: us-central1
+  nodeConfig:
+    machineType: n2-highmem-8 # For Spark/Kafka
+    diskSizeGb: 200
+    taints:
+      - key: "workload"
+        value: "analytics"
+        effect: "NO_SCHEDULE"
+  autoscaling:
+    minNodeCount: 0
+    maxNodeCount: 3

@@ -1,0 +1,25 @@
+# Namespace-level mTLS for ecommerce services
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: ecommerce
+spec:
+  mtls:
+    mode: STRICT
+---
+# Allow external webhook calls to conversion-webhook
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: conversion-webhook-permissive
+  namespace: ecommerce
+spec:
+  selector:
+    matchLabels:
+      app: conversion-webhook
+  mtls:
+    mode: PERMISSIVE
+  portLevelMtls:
+    8080:
+      mode: PERMISSIVE

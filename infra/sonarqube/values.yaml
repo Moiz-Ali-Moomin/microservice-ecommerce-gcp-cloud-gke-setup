@@ -1,0 +1,45 @@
+# infra/sonarqube/values.yaml
+# Production-ready configuration for SonarQube on K8s
+
+# Using the official chart: sonarqube/sonarqube
+
+# Persistence for data
+# In GCP, use standard-rwo. Locally, it will use default local-path.
+persistence:
+  enabled: true
+  size: 5Gi
+
+# PostgreSQL Configuration (Bundled)
+postgresql:
+  enabled: true
+  persistence:
+    enabled: true
+    size: 5Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+# SonarQube Resources
+resources:
+  requests:
+    cpu: 500m
+    memory: 2Gi
+  limits:
+    cpu: 1000m
+    memory: 4Gi
+
+# Readiness/Liveness Probes (Standard)
+readinessProbe:
+  initialDelaySeconds: 60
+  periodSeconds: 30
+livenessProbe:
+  initialDelaySeconds: 120
+  periodSeconds: 30
+
+# Monitoring (Optional but good)
+prometheusExporter:
+  enabled: true

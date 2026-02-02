@@ -1,0 +1,44 @@
+# infra/observability/prometheus-values.yaml
+# Values for kube-prometheus-stack
+
+grafana:
+  adminPassword: "admin" # Change in production
+  persistence:
+    enabled: true
+    size: 10Gi
+  service:
+    type: ClusterIP
+  
+prometheus:
+  prometheusSpec:
+    retention: 10d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: standard-rwo
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 50Gi
+
+# infra/observability/loki-values.yaml
+# Values for grafana/loki-stack
+
+loki:
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClassName: standard-rwo
+  config:
+    schema_config:
+      configs:
+        - from: 2020-10-24
+          store: boltdb-shipper
+          object_store: filesystem
+          schema: v11
+          index:
+            prefix: index_
+            period: 24h
+
+promtail:
+  enabled: true

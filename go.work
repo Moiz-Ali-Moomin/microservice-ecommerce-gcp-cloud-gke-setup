@@ -1,0 +1,21 @@
+go 1.24.0
+
+use (
+	./services/admin-backoffice-service
+	./services/analytics-ingest-service
+	./services/api-gateway
+	./services/attribution-service
+	./services/audit-service
+	./services/auth-service
+	./services/cart-service
+	./services/conversion-webhook
+	./services/feature-flag-service
+	./services/landing-service
+	./services/notification-service
+	./services/offer-service
+	./services/redirect-service
+	./services/reporting-service
+	./services/shared-lib
+	./services/storefront-service
+	./services/user-service
+)

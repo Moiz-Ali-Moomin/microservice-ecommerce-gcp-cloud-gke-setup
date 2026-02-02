@@ -1,0 +1,19 @@
+# infra/observability/grafana/values.yaml
+# Values for grafana/grafana
+persistence:
+  enabled: true
+  size: 10Gi
+adminPassword: "admin" # Change in prod via secret
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+    - name: Prometheus
+      type: prometheus
+      url: http://prometheus-operated.observ.svc.cluster.local:9090
+    - name: Loki
+      type: loki
+      url: http://loki.observ.svc.cluster.local:3100
+    - name: Tempo
+      type: tempo
+      url: http://tempo.observ.svc.cluster.local:3100

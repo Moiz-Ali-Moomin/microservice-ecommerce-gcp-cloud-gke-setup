@@ -1,0 +1,38 @@
+{{define "content"}}
+<div class="cart-page">
+    <h2>Shopping Cart</h2>
+
+    {{if .Cart.Items}}
+    <div class="cart-summary">
+        <p><strong>{{len .Cart.Items}}</strong> items in your cart</p>
+    </div>
+
+    <ul class="cart-items">
+        {{range .Cart.Items}}
+        <li class="cart-item">
+            <div class="item-details">
+                <h4>{{.Title}}</h4>
+                <p>Unit Price: ${{printf "%.2f" .Price}}</p>
+            </div>
+            <div class="item-actions">
+                <div class="quantity-control">
+                    <span>Qty: {{.Quantity}}</span>
+                </div>
+                <span class="item-total">${{printf "%.2f" (mul .Price .Quantity)}}</span>
+            </div>
+        </li>
+        {{end}}
+    </ul>
+
+    <div class="cart-total">
+        <h3>Total: <span class="price">${{printf "%.2f" .Total}}</span></h3>
+        <a href="/checkout" style="text-decoration: none;" class="btn-checkout">Checkout</a>
+    </div>
+    {{else}}
+    <div class="empty-state">
+        <p>Your cart is empty.</p>
+        <a href="/" class="btn-secondary">Browse Products</a>
+    </div>
+    {{end}}
+</div>
+{{end}}

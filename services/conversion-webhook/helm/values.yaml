@@ -1,0 +1,17 @@
+replicaCount: 2
+image:
+  repository: registry.gitlab.com/haxor/ecommerce-platform/conversion-webhook
+  tag: latest
+service:
+  type: ClusterIP
+  port: 8080
+env:
+  KAFKA_BROKERS: "kafka-0.kafka-headless.kafka.svc:9092"
+  CLICKBANK_SECRET_KEY: "change_me_in_prod"
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi

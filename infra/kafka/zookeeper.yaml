@@ -1,0 +1,26 @@
+# infra/kafka/zookeeper.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zookeeper
+  namespace: kafka
+spec:
+  selector:
+    matchLabels:
+      app: zookeeper
+  serviceName: zookeeper-headless
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+    spec:
+      containers:
+      - name: zookeeper
+        image: bitnami/zookeeper:3.9.0
+        ports:
+        - containerPort: 2181
+          name: client
+        env:
+        - name: ALLOW_ANONYMOUS_LOGIN
+          value: "yes" # Hardened in real prod

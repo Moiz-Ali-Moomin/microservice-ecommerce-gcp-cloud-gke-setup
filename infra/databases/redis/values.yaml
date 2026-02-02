@@ -1,0 +1,18 @@
+# infra/databases/redis/values.yaml
+# Production-ready Bitnami Redis HA
+architecture: replication
+auth:
+  existingSecret: "redis-creds"
+master:
+  persistence:
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+replica:
+  replicaCount: 2
+  persistence:
+    size: 10Gi
+metrics:
+  enabled: true

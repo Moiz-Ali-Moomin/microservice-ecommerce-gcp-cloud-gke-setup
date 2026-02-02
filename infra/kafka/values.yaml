@@ -1,0 +1,61 @@
+# infra/kafka/values.yaml
+# Production-ready values for bitnami/kafka
+
+image:
+  registry: registry.bitnami.com
+  repository: bitnami/kafka
+  tag: 3.7.0
+
+controller:
+  replicaCount: 3
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClass: "standard-rwo"
+  resources:
+    enabled: true
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  
+  # Kraft mode (No Zookeeper)
+  # Keeping it simple with Zookeeper for broad compatibility if needed, 
+  # but Kraft is modern. Let's stick to Kraft (controller roles).
+  # Bitnami chart 26.x+ supports KRaft.
+
+listeners:
+  client:
+    protocol: PLAINTEXT
+  interbroker:
+    protocol: PLAINTEXT
+  external:
+    protocol: PLAINTEXT
+    
+serviceAccount:
+  create: true
+
+metrics:
+  kafka:
+    enabled: true
+    image:
+      registry: docker.io
+      repository: bitnami/kafka-exporter
+      tag: 1.7.0-debian-11-r2
+  jmx:
+    enabled: true
+
+provisioning:
+  enabled: true
+  numPartitions: 3
+  replicationFactor: 2 # For 3 nodes
+  topics:
+    - name: page.viewed
+    - name: cta.clicked
+    - name: checkout.redirected
+    - name: conversion.completed
+    - name: campaign.attributed
+    - name: user.signup
+    - name: checkout.completed

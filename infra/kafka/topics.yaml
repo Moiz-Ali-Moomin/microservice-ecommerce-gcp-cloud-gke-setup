@@ -1,0 +1,35 @@
+# infra/kafka/topics.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-topics
+  namespace: kafka
+data:
+  create-topics.sh: |
+    #!/bin/bash
+    blocks=("page.viewed" "cta.clicked" "campaign.attributed" "checkout.redirected" "conversion.completed" "user.signup" "checkout.completed")
+    for topic in "${blocks[@]}"; do
+      # Production Config: 6 partitions for high concurrency, 7-day retention (604800000ms)
+      kafka-topics.sh --create --if-not-exists --bootstrap-server kafka-0.kafka-headless.kafka.svc:9092 --partitions 6 --replication-factor 2 --config retention.ms=604800000 --topic "$topic"
+    done
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-topic-creator
+  namespace: kafka
+spec:
+  template:
+    spec:
+      containers:
+      - name: topic-creator
+        image: bitnami/kafka:3.6.0
+        command: ["/bin/bash", "/scripts/create-topics.sh"]
+        volumeMounts:
+        - name: scripts
+          mountPath: /scripts
+      volumes:
+      - name: scripts
+        configMap:
+          name: kafka-topics
+      restartPolicy: OnFailure

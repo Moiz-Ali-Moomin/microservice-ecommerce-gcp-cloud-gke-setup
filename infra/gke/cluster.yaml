@@ -1,0 +1,21 @@
+# infra/gke/cluster.yaml
+# GKE Standard Cluster Definition
+apiVersion: container.cnrm.cloud.google.com/v1beta1
+kind: ContainerCluster
+metadata:
+  name: ecommerce-platform-prod
+  namespace: config-control
+spec:
+  location: us-central1
+  initialNodeCount: 1
+  # Network config would go here (VPC-native)
+  networkingMode: VPC_NATIVE
+  ipAllocationPolicy:
+    clusterIpv4CidrBlock: ""
+    servicesIpv4CidrBlock: ""
+  # Shielded Nodes
+  shieldedInstanceConfig:
+    enableSecureBoot: true
+  # Workload Identity
+  workloadIdentityConfig:
+    workloadPool: "PROJECT_ID.svc.id.goog"

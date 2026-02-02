@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blackbox-exporter
+  namespace: observability
+  labels:
+    app: blackbox-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: blackbox-exporter
+  template:
+    metadata:
+      labels:
+        app: blackbox-exporter
+    spec:
+      containers:
+      - name: blackbox-exporter
+        image: prom/blackbox-exporter:master
+        args:
+        - "--config.file=/etc/blackbox_exporter/blackbox.yaml"
+        ports:
+        - containerPort: 9115
+        volumeMounts:
+        - name: config
+          mountPath: /etc/blackbox_exporter
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: config
+        configMap:
+          name: blackbox-exporter-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: blackbox-exporter
+  namespace: observability
+  labels:
+    app: blackbox-exporter
+spec:
+  selector:
+    app: blackbox-exporter
+  ports:
+  - port: 9115
+    targetPort: 9115

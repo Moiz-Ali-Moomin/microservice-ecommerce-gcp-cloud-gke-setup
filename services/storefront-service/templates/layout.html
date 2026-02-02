@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>{{if .Title}}{{.Title}} - {{end}}GO commerce</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+
+    <header class="site-header">
+        <div class="container header-content">
+            <a href="/" class="brand-logo">
+                <span class="logo-text">GO commerce™</span>
+            </a>
+
+            <nav class="main-nav">
+                <a href="/" class="nav-link">Home</a>
+                <a href="/cart" class="nav-link">Cart</a>
+                {{if .User}}
+                <span class="nav-link" style="color: #666; cursor: default;">Hi, {{.User}}</span>
+                <a href="/logout" class="nav-cta">Logout</a>
+                {{else}}
+                <a href="/login" class="nav-cta">Login / Sign Up</a>
+                {{end}}
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div class="container">
+            {{template "content" .}}
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <p>&copy; 2024 GO commerce™. All rights reserved.</p>
+        </div>
+    </footer>
+
+</body>
+
+</html>

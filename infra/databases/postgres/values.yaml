@@ -1,0 +1,21 @@
+# infra/databases/postgres/values.yaml
+# Production-ready Bitnami PostgreSQL HA
+architecture: replication
+auth:
+  username: "app_user"
+  database: "ecommerce_db"
+  existingSecret: "postgres-creds" # Managed via SealedSecrets in real repo
+primary:
+  persistence:
+    size: 20Gi
+    storageClass: "standard-rwo"
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+readReplicas:
+  replicaCount: 2
+  persistence:
+    size: 20Gi
+metrics:
+  enabled: true

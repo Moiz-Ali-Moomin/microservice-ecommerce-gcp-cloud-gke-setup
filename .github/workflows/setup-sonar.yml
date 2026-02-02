@@ -1,0 +1,22 @@
+name: Setup SonarQube (One-Time)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  setup-sonar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Sonar bootstrap
+        env:
+          SONAR_ADMIN_PASSWORD: ${{ secrets.SONAR_ADMIN_PASSWORD }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          chmod +x scripts/bootstrap/setup-sonar.sh
+          ./scripts/bootstrap/setup-sonar.sh

@@ -1,0 +1,17 @@
+# infra/kafka/sink-to-gcs.yaml
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaConnector
+metadata:
+  name: gcs-sink
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: my-connect-cluster
+spec:
+  class: com.google.pubsub.kafka.sink.CloudStorageSinkConnector # Example class
+  tasksMax: 3
+  config:
+    topics: "page.viewed,cta.clicked,conversion.completed"
+    gcs.bucket.name: "ecommerce-events-archive"
+    gcs.credentials.json: "${file:/opt/gcp/credentials.json}"
+    format.class: "io.confluent.connect.gcs.format.json.JsonFormat"
+    flush.size: "100"

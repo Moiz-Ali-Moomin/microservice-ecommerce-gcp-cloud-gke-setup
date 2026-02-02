@@ -1,0 +1,42 @@
+{{define "content"}}
+<div class="payment-page"
+    style="max-width: 500px; margin: 40px auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+    <h2>Secure Payment Gateway</h2>
+    <p style="color: #666; margin-bottom: 20px;">Enter your card details to complete the purchase.</p>
+
+    <form action="/payment/process" method="POST">
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Card Name</label>
+            <input type="text" placeholder="John Doe" required
+                style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+        </div>
+
+        <div style="margin-bottom: 15px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 500;">Card Number</label>
+            <input type="text" placeholder="0000 0000 0000 0000" pattern="\d{16}" title="16 digits" required
+                style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+        </div>
+
+        <div style="display: flex; gap: 15px; margin-bottom: 20px;">
+            <div style="flex: 1;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Expiry</label>
+                <input type="text" placeholder="MM/YY" required
+                    style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+            <div style="flex: 1;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">CVC</label>
+                <input type="text" placeholder="123" pattern="\d{3}" title="3 digits" required
+                    style="width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+        </div>
+
+        <button type="submit" class="btn-checkout"
+            style="width: 100%; background: #28a745; color: white; border: none; padding: 12px; font-size: 16px; border-radius: 4px; cursor: pointer;">Place
+            Order - ${{printf "%.2f" .Total}}</button>
+    </form>
+
+    <div style="text-align: center; margin-top: 15px; font-size: 0.8rem; color: #888;">
+        🔒 Encrypted & Secure | Trusted by Amazon & Flipkart
+    </div>
+</div>
+{{end}}
