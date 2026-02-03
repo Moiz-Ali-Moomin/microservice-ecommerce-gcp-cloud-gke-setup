@@ -1,16 +1,35 @@
-FROM golang:1.23 as builder
+# Builder
+FROM golang:1.23 AS builder
+
 WORKDIR /app
-# 
-COPY shared-lib shared-lib
-COPY cart-service cart-service
-RUN go work init ./shared-lib ./cart-service
-RUN cd cart-service && CGO_ENABLED=0 GOOS=linux go build -o cart-service cmd/main.go
+
+# 1. Copy workspace definition
+COPY go.work go.work.sum ./
+
+# 2. Copy shared lib
+COPY services/shared-lib ./services/shared-lib
+
+# 3. Copy service code
+COPY services/cart-service ./services/cart-service
+
+# 4. Fix go.work
+RUN grep -v "./services/" go.work > go.work.new && \
+    mv go.work.new go.work && \
+    go work use ./services/shared-lib ./services/cart-service
+
+# 5. Build
+RUN cd services/cart-service && \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/server cmd/main.go
 
 # Runnable
-FROM gcr.io/distroless/static:nonroot
-WORKDIR /
-COPY --from=builder /app/cart-service/cart-service .
-USER 65532:65532
-EXPOSE 8080
-ENTRYPOINT ["/cart-service"]
+FROM gcr.io/distroless/static-debian12:nonroot
 
+WORKDIR /app
+
+COPY --from=builder /app/server .
+
+USER nonroot:nonroot
+
+EXPOSE 8080
+
+ENTRYPOINT ["/app/server"]

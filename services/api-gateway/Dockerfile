@@ -1,16 +1,35 @@
-FROM golang:1.23 as builder
+# Builder
+FROM golang:1.23 AS builder
+
 WORKDIR /app
-# 
-COPY shared-lib shared-lib
-COPY api-gateway api-gateway
-RUN go work init ./shared-lib ./api-gateway
-RUN cd api-gateway && CGO_ENABLED=0 GOOS=linux go build -o api-gateway cmd/main.go
+
+# 1. Copy workspace definition
+COPY go.work go.work.sum ./
+
+# 2. Copy shared lib
+COPY services/shared-lib ./services/shared-lib
+
+# 3. Copy service code
+COPY services/api-gateway ./services/api-gateway
+
+# 4. Fix go.work
+RUN grep -v "./services/" go.work > go.work.new && \
+    mv go.work.new go.work && \
+    go work use ./services/shared-lib ./services/api-gateway
+
+# 5. Build
+RUN cd services/api-gateway && \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/server cmd/main.go
 
 # Runnable
-FROM gcr.io/distroless/static:nonroot
-WORKDIR /
-COPY --from=builder /app/api-gateway/api-gateway .
-USER 65532:65532
-EXPOSE 8080
-ENTRYPOINT ["/api-gateway"]
+FROM gcr.io/distroless/static-debian12:nonroot
 
+WORKDIR /app
+
+COPY --from=builder /app/server .
+
+USER nonroot:nonroot
+
+EXPOSE 8080
+
+ENTRYPOINT ["/app/server"]

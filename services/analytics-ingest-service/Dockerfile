@@ -1,14 +1,35 @@
-FROM golang:1.23 as builder
+# Builder
+FROM golang:1.23 AS builder
+
 WORKDIR /app
-COPY shared-lib shared-lib
-COPY analytics-ingest-service analytics-ingest-service
-RUN go work init ./shared-lib ./analytics-ingest-service
-RUN cd analytics-ingest-service && CGO_ENABLED=0 GOOS=linux go build -o analytics-ingest-service cmd/main.go
 
-FROM gcr.io/distroless/static:nonroot
-WORKDIR /
-COPY --from=builder /app/analytics-ingest-service/analytics-ingest-service .
-USER 65532:65532
+# 1. Copy workspace definition
+COPY go.work go.work.sum ./
+
+# 2. Copy shared lib
+COPY services/shared-lib ./services/shared-lib
+
+# 3. Copy service code
+COPY services/analytics-ingest-service ./services/analytics-ingest-service
+
+# 4. Fix go.work
+RUN grep -v "./services/" go.work > go.work.new && \
+    mv go.work.new go.work && \
+    go work use ./services/shared-lib ./services/analytics-ingest-service
+
+# 5. Build
+RUN cd services/analytics-ingest-service && \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/server cmd/main.go
+
+# Runnable
+FROM gcr.io/distroless/static-debian12:nonroot
+
+WORKDIR /app
+
+COPY --from=builder /app/server .
+
+USER nonroot:nonroot
+
 EXPOSE 8080
-ENTRYPOINT ["/analytics-ingest-service"]
 
+ENTRYPOINT ["/app/server"]
