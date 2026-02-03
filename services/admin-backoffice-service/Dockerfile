@@ -19,7 +19,7 @@ RUN grep -v "./services/" go.work > go.work.new && \
 
 # 5. Build
 RUN cd services/admin-backoffice-service && \
-    CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/server cmd/main.go
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/server main.go
 
 # Runnable
 FROM gcr.io/distroless/static-debian12:nonroot
