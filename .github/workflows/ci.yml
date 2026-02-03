@@ -45,7 +45,7 @@ jobs:
       - name: GolangCI-Lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.60.3
+          version: v1.62.0
           args: --timeout=5m --allow-parallel-runners
 
       # ✅ TEST: run ONLY inside services (real modules)
