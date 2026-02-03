@@ -1,49 +1,104 @@
 # syntax=docker/dockerfile:1
 
-# ============================================================
-# UNIFIED BUILDER - Compiles ALL service binaries in one stage
-# ============================================================
-FROM golang:1.24 AS builder
+# ============================================================================
+# UNIFIED GO MICROSERVICES BUILDER - Production Grade
+# ============================================================================
+# Architecture:
+#   1. deps    - Download all dependencies ONCE (cached unless go.mod changes)
+#   2. builder - Compile ALL binaries in parallel (cached unless source changes)
+#   3. runtime - Distroless images per service (just COPY binary)
+#
+# Optimizations:
+#   - go.mod/go.sum copied FIRST for dependency layer caching
+#   - BuildKit cache mounts for /go/pkg/mod and go-build cache
+#   - Parallel compilation using shell backgrounding
+#   - Static binaries: CGO_ENABLED=0, stripped with -ldflags="-w -s"
+#   - Distroless nonroot runtime for minimal attack surface
+# ============================================================================
+
+FROM golang:1.24-bookworm AS deps
 
 WORKDIR /app
 
-# 1. Copy entire services directory (includes shared-lib and all services)
+# 1. Copy ONLY go.mod and go.sum files (dependency definitions)
+#    This layer is cached unless dependencies change.
+COPY services/shared-lib/go.mod services/shared-lib/go.su[m] ./services/shared-lib/
+COPY services/admin-backoffice-service/go.mod services/admin-backoffice-service/go.su[m] ./services/admin-backoffice-service/
+COPY services/analytics-ingest-service/go.mod services/analytics-ingest-service/go.su[m] ./services/analytics-ingest-service/
+COPY services/api-gateway/go.mod services/api-gateway/go.su[m] ./services/api-gateway/
+COPY services/attribution-service/go.mod services/attribution-service/go.su[m] ./services/attribution-service/
+COPY services/audit-service/go.mod services/audit-service/go.su[m] ./services/audit-service/
+COPY services/auth-service/go.mod services/auth-service/go.su[m] ./services/auth-service/
+COPY services/cart-service/go.mod services/cart-service/go.su[m] ./services/cart-service/
+COPY services/conversion-webhook/go.mod services/conversion-webhook/go.su[m] ./services/conversion-webhook/
+COPY services/feature-flag-service/go.mod services/feature-flag-service/go.su[m] ./services/feature-flag-service/
+COPY services/landing-service/go.mod services/landing-service/go.su[m] ./services/landing-service/
+COPY services/notification-service/go.mod services/notification-service/go.su[m] ./services/notification-service/
+COPY services/offer-service/go.mod services/offer-service/go.su[m] ./services/offer-service/
+COPY services/redirect-service/go.mod services/redirect-service/go.su[m] ./services/redirect-service/
+COPY services/reporting-service/go.mod services/reporting-service/go.su[m] ./services/reporting-service/
+COPY services/storefront-service/go.mod services/storefront-service/go.su[m] ./services/storefront-service/
+COPY services/user-service/go.mod services/user-service/go.su[m] ./services/user-service/
+
+# 2. Download ALL dependencies in one cached layer
+RUN --mount=type=cache,target=/go/pkg/mod \
+    cd /app/services/shared-lib && go mod download && \
+    cd /app/services/admin-backoffice-service && go mod download && \
+    cd /app/services/analytics-ingest-service && go mod download && \
+    cd /app/services/api-gateway && go mod download && \
+    cd /app/services/attribution-service && go mod download && \
+    cd /app/services/audit-service && go mod download && \
+    cd /app/services/auth-service && go mod download && \
+    cd /app/services/cart-service && go mod download && \
+    cd /app/services/conversion-webhook && go mod download && \
+    cd /app/services/feature-flag-service && go mod download && \
+    cd /app/services/landing-service && go mod download && \
+    cd /app/services/notification-service && go mod download && \
+    cd /app/services/offer-service && go mod download && \
+    cd /app/services/redirect-service && go mod download && \
+    cd /app/services/reporting-service && go mod download && \
+    cd /app/services/storefront-service && go mod download && \
+    cd /app/services/user-service && go mod download
+
+# ============================================================================
+# BUILDER - Compile all binaries
+# ============================================================================
+FROM deps AS builder
+
+# 3. Copy source code (this layer invalidates on code change, but deps are cached)
 COPY services ./services
 
-# 2. Download all dependencies once
-WORKDIR /app/services
-RUN --mount=type=cache,target=/go/pkg/mod \
-    for d in */; do \
-    if [ -f "$d/go.mod" ]; then \
-    echo "Downloading deps for $d" && \
-    (cd "$d" && go mod download); \
-    fi \
-    done
+# 4. Create output directory and build ALL binaries
+#    Using parallel builds with & and wait for low-CPU efficiency
+RUN mkdir -p /binaries
 
-# 3. Build ALL binaries
-WORKDIR /app/services
+# Set build environment once
+ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
+
+# Build all services (parallel where possible, with wait to ensure completion)
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/admin-backoffice-service ./admin-backoffice-service/main.go && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/analytics-ingest-service ./analytics-ingest-service/cmd/main.go && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/api-gateway ./api-gateway/cmd/main.go && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/attribution-service ./attribution-service/cmd/main.go && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/audit-service ./audit-service/cmd/main.go && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/auth-service ./auth-service/cmd/main.go && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/cart-service ./cart-service/cmd/main.go && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/conversion-webhook ./conversion-webhook/cmd/main.go && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/feature-flag-service ./feature-flag-service/cmd/main.go && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/landing-service ./landing-service/cmd/main.go && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/notification-service ./notification-service/cmd/main.go && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/offer-service ./offer-service/cmd/main.go && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/redirect-service ./redirect-service/cmd/main.go && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/reporting-service ./reporting-service/cmd/main.go && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/storefront-service ./storefront-service/cmd/main.go && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/user-service ./user-service/cmd/main.go
+    cd /app/services/admin-backoffice-service && go build -ldflags="-w -s" -o /binaries/admin-backoffice-service ./main.go & \
+    cd /app/services/analytics-ingest-service && go build -ldflags="-w -s" -o /binaries/analytics-ingest-service ./cmd/main.go & \
+    cd /app/services/api-gateway && go build -ldflags="-w -s" -o /binaries/api-gateway ./cmd/main.go & \
+    cd /app/services/attribution-service && go build -ldflags="-w -s" -o /binaries/attribution-service ./cmd/main.go & \
+    cd /app/services/audit-service && go build -ldflags="-w -s" -o /binaries/audit-service ./cmd/main.go & \
+    cd /app/services/auth-service && go build -ldflags="-w -s" -o /binaries/auth-service ./cmd/main.go & \
+    cd /app/services/cart-service && go build -ldflags="-w -s" -o /binaries/cart-service ./cmd/main.go & \
+    cd /app/services/conversion-webhook && go build -ldflags="-w -s" -o /binaries/conversion-webhook ./cmd/main.go & \
+    cd /app/services/feature-flag-service && go build -ldflags="-w -s" -o /binaries/feature-flag-service ./cmd/main.go & \
+    cd /app/services/landing-service && go build -ldflags="-w -s" -o /binaries/landing-service ./cmd/main.go & \
+    cd /app/services/notification-service && go build -ldflags="-w -s" -o /binaries/notification-service ./cmd/main.go & \
+    cd /app/services/offer-service && go build -ldflags="-w -s" -o /binaries/offer-service ./cmd/main.go & \
+    cd /app/services/redirect-service && go build -ldflags="-w -s" -o /binaries/redirect-service ./cmd/main.go & \
+    cd /app/services/reporting-service && go build -ldflags="-w -s" -o /binaries/reporting-service ./cmd/main.go & \
+    cd /app/services/storefront-service && go build -ldflags="-w -s" -o /binaries/storefront-service ./cmd/main.go & \
+    cd /app/services/user-service && go build -ldflags="-w -s" -o /binaries/user-service ./cmd/main.go & \
+    wait
 
-# ============================================================
-# RUNTIME STAGES - One per service, just copies the binary
-# ============================================================
+# ============================================================================
+# RUNTIME STAGES - Minimal distroless images per service
+# ============================================================================
 
 FROM gcr.io/distroless/static-debian12:nonroot AS admin-backoffice-service
 WORKDIR /app
