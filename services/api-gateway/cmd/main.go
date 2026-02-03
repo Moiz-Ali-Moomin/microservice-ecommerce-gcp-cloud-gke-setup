@@ -26,9 +26,26 @@ func main() {
 	// This gateway might serve as an aggregation layer for mobile apps
 
 	mux := http.NewServeMux()
+	// Health endpoints
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
+	})
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
+	// Root path handler - API Gateway status
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			// Let other handlers handle non-root paths
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"service":"api-gateway","status":"healthy","version":"1.0.0"}`))
 	})
 
 	// Offer Service
@@ -110,8 +127,8 @@ func main() {
 	redirectProxy := httputil.NewSingleHostReverseProxy(redirectURL)
 	mux.Handle("/click/", redirectProxy)
 
-	// Storefront as default UI catch-all
-	mux.Handle("/", storefrontProxy)
+	// Storefront as UI fallback for unmatched paths starting with /ui/
+	mux.Handle("/ui/", http.StripPrefix("/ui", storefrontProxy))
 
 	logger.Log.Info("Starting api-gateway on :8080")
 	if err := http.ListenAndServe(":8080", mux); err != nil {
