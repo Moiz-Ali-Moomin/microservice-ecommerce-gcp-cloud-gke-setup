@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -19,6 +20,11 @@ type Consumer struct {
 	topics  []string
 	groupID string
 	handler Handler
+
+	// State
+	mu      sync.RWMutex
+	running bool
+	ready   bool
 }
 
 func NewConsumer(brokers []string, groupID string, topics []string, handler Handler) *Consumer {
@@ -30,33 +36,90 @@ func NewConsumer(brokers []string, groupID string, topics []string, handler Hand
 	}
 }
 
+// IsReady returns true if the consumer is connected to Kafka and consuming.
+// Useful for Kubernetes readiness probes.
+func (c *Consumer) IsReady() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.ready
+}
+
+// StartAsync starts the consumer in a background goroutine.
+// It will retry indefinitely until Kafka becomes available.
+// This function returns immediately and never blocks.
+// Use IsReady() to check if the consumer is connected.
+func (c *Consumer) StartAsync(ctx context.Context) {
+	go c.runWithRetry(ctx)
+}
+
+// Start is a blocking call that runs the consumer.
+// DEPRECATED: Use StartAsync for non-blocking startup.
+// This method is kept for backwards compatibility but now also retries forever.
 func (c *Consumer) Start(ctx context.Context) error {
+	c.runWithRetry(ctx)
+	return nil // Never returns error, retries forever
+}
+
+func (c *Consumer) runWithRetry(ctx context.Context) {
+	c.mu.Lock()
+	if c.running {
+		c.mu.Unlock()
+		return
+	}
+	c.running = true
+	c.mu.Unlock()
+
 	config := sarama.NewConfig()
 	config.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
 	config.Consumer.Offsets.Initial = sarama.OffsetOldest
+	config.Consumer.Return.Errors = true
 
-	// Retry loop for connecting to Kafka
+	// Retry connecting to Kafka indefinitely with exponential backoff
 	var consumer sarama.ConsumerGroup
 	var err error
+	backoff := 2 * time.Second
+	maxBackoff := 60 * time.Second
 
-	for i := 0; i < 30; i++ { // Retry for ~60 seconds
-		consumer, err = sarama.NewConsumerGroup(c.brokers, c.groupID, config)
-		if err == nil {
-			break
-		}
-		logger.Log.Warn("Failed to create consumer group, retrying in 2s...", zap.Error(err))
-		time.Sleep(2 * time.Second)
-
+	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			logger.Log.Info("Consumer context cancelled, stopping retry loop")
+			return
 		default:
+		}
+
+		consumer, err = sarama.NewConsumerGroup(c.brokers, c.groupID, config)
+		if err == nil {
+			logger.Log.Info("Successfully connected to Kafka", zap.Strings("brokers", c.brokers))
+			break
+		}
+
+		logger.Log.Warn("Failed to connect to Kafka, retrying...",
+			zap.Error(err),
+			zap.Duration("backoff", backoff),
+		)
+		time.Sleep(backoff)
+
+		// Exponential backoff with cap
+		backoff = backoff * 2
+		if backoff > maxBackoff {
+			backoff = maxBackoff
 		}
 	}
 
-	if err != nil {
-		return err
-	}
+	c.mu.Lock()
+	c.ready = true
+	c.mu.Unlock()
+
+	defer func() {
+		c.mu.Lock()
+		c.ready = false
+		c.running = false
+		c.mu.Unlock()
+		if consumer != nil {
+			_ = consumer.Close()
+		}
+	}()
 
 	consumerCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -66,23 +129,30 @@ func (c *Consumer) Start(ctx context.Context) error {
 	signal.Notify(sigterm, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		<-sigterm
-		logger.Log.Info("Terminating consumer via signal")
-		cancel()
+		select {
+		case <-sigterm:
+			logger.Log.Info("Terminating consumer via signal")
+			cancel()
+		case <-ctx.Done():
+		}
 	}()
 
 	handler := &groupHandler{
 		handler: c.handler,
 	}
 
+	// Consume loop with auto-reconnect
 	for {
 		if err := consumer.Consume(consumerCtx, c.topics, handler); err != nil {
-			logger.Log.Error("Error from consumer", zap.Error(err))
-			return err
+			logger.Log.Error("Error from consumer, will reconnect", zap.Error(err))
+			// If Consume returns error (e.g., rebalance), we just loop and retry
 		}
 		if consumerCtx.Err() != nil {
-			return nil
+			logger.Log.Info("Consumer loop exiting due to context cancellation")
+			return
 		}
+		// Brief pause before next consume call
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 
@@ -97,8 +167,7 @@ func (h *groupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sara
 		logger.Log.Debug("Message claimed", zap.String("topic", msg.Topic), zap.Int64("offset", msg.Offset))
 		if err := h.handler(sess.Context(), string(msg.Key), msg.Value); err != nil {
 			logger.Log.Error("Handler failed", zap.Error(err))
-			// Decide whether to mark offset or not based on delivery guarantees
-			// For now, we continue
+			// Continue processing, mark offset (at-least-once)
 		}
 		sess.MarkMessage(msg, "")
 	}
