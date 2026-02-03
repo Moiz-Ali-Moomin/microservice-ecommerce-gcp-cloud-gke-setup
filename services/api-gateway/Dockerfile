@@ -6,11 +6,11 @@ WORKDIR /app
 # 1. Copy shared library (Dependency)
 COPY services/shared-lib ./services/shared-lib
 
-# 2. Copy go.mod and go.sum (Dependency definitions)
-COPY services/api-gateway/go.mod services/api-gateway/go.sum ./services/api-gateway/
+# 2. Copy go.mod (required) and go.sum (optional via glob pattern)
+#    The go.su[m] pattern matches go.sum if present, but doesn't fail if missing.
+COPY services/api-gateway/go.mod services/api-gateway/go.su[m] ./services/api-gateway/
 
 # 3. Download dependencies with Cache Mounts
-#    Persists /go/pkg/mod across builds, even if go.mod changes.
 WORKDIR /app/services/api-gateway
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
@@ -19,7 +19,6 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY services/api-gateway /app/services/api-gateway
 
 # 5. Build binary with Cache Mounts
-#    Persists build cache (/root/.cache/go-build) for faster compilation.
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
