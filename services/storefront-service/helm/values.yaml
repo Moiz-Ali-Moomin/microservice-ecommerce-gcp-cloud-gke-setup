@@ -1,4 +1,4 @@
-replicaCount: 2
+replicaCount: 1
 image:
   repository: us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo/storefront-service
   tag: latest

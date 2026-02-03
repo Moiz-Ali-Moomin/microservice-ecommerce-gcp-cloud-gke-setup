@@ -9,7 +9,7 @@ spec:
     matchLabels:
       app: kafka
   serviceName: kafka-headless
-  replicas: 3
+  replicas: 1
   template:
     metadata:
       labels:
@@ -39,9 +39,9 @@ spec:
             export KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
             export KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
             
-            # Quorum voters: 0@kafka-0.kafka-headless.kafka.svc.cluster.local:9093, ...
-            # Assuming 3 replicas named kafka-0, kafka-1, kafka-2
-            export KAFKA_CONTROLLER_QUORUM_VOTERS=0@kafka-0.kafka-headless.kafka.svc.cluster.local:9093,1@kafka-1.kafka-headless.kafka.svc.cluster.local:9093,2@kafka-2.kafka-headless.kafka.svc.cluster.local:9093
+            # Quorum voters: 0@kafka-0.kafka-headless.kafka.svc.cluster.local:9093
+            # Assuming 1 replica named kafka-0
+            export KAFKA_CONTROLLER_QUORUM_VOTERS=0@kafka-0.kafka-headless.kafka.svc.cluster.local:9093
             
             # Storage
             export KAFKA_LOG_DIRS=/var/lib/kafka/data
