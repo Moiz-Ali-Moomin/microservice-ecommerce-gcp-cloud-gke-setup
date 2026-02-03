@@ -94,25 +94,19 @@ create_namespaces() {
 # Step 5: Deploy Kafka
 # ============================================================
 deploy_kafka() {
-  if helm status kafka -n ${KAFKA_NAMESPACE} &>/dev/null; then
+  if kubectl get statefulset kafka -n ${KAFKA_NAMESPACE} &>/dev/null; then
     log "Kafka already deployed, skipping..."
     return
   fi
   
-  log "Deploying Kafka with persistence..."
-  helm repo add bitnami https://charts.bitnami.com/bitnami --force-update
-  helm repo update
+  log "Deploying Apache Kafka (Kraft mode)..."
+  # Apply manifests
+  kubectl apply -f infra/kafka/kafka-brokers.yaml
+  kubectl apply -f infra/kafka/topics.yaml
   
-  helm upgrade --install kafka bitnami/kafka \
-    --namespace ${KAFKA_NAMESPACE} \
-    --create-namespace \
-    --set replicaCount=1 \
-    --set persistence.enabled=true \
-    --set persistence.size=8Gi \
-    --set kraft.enabled=true \
-    --set listeners.client.protocol=PLAINTEXT \
-    --set listeners.controller.protocol=PLAINTEXT \
-    --wait --timeout 600s
+  log "Waiting for Kafka to be ready..."
+  # Wait for at least one pod to be ready to confirm rollout started
+  kubectl wait --for=condition=ready pod -l app=kafka -n ${KAFKA_NAMESPACE} --timeout=300s
   
   log "Kafka deployed successfully"
 }
