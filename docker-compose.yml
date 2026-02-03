@@ -54,8 +54,8 @@ services:
   # ===============================================================
   api-gateway:
     build:
-      context: ./services
-      dockerfile: ./api-gateway/Dockerfile
+      context: .
+      dockerfile: ./services/api-gateway/Dockerfile
     image: ecommerce/api-gateway:local
     ports:
       - "8080:8080"
@@ -78,8 +78,8 @@ services:
 
   auth-service:
     build:
-      context: ./services
-      dockerfile: ./auth-service/Dockerfile
+      context: .
+      dockerfile: ./services/auth-service/Dockerfile
     image: ecommerce/auth-service:local
     ports:
       - "8081:8080"
@@ -92,8 +92,8 @@ services:
 
   user-service:
     build:
-      context: ./services
-      dockerfile: ./user-service/Dockerfile
+      context: .
+      dockerfile: ./services/user-service/Dockerfile
     image: ecommerce/user-service:local
     ports:
       - "8082:8080"
@@ -106,8 +106,8 @@ services:
 
   admin-backoffice-service:
     build:
-      context: ./services
-      dockerfile: ./admin-backoffice-service/Dockerfile
+      context: .
+      dockerfile: ./services/admin-backoffice-service/Dockerfile
     image: ecommerce/admin-backoffice-service:local
     ports:
       - "8083:8080"
@@ -120,8 +120,8 @@ services:
 
   analytics-ingest-service:
     build:
-      context: ./services
-      dockerfile: ./analytics-ingest-service/Dockerfile
+      context: .
+      dockerfile: ./services/analytics-ingest-service/Dockerfile
     image: ecommerce/analytics-ingest-service:local
     ports:
       - "8084:8080"
@@ -134,8 +134,8 @@ services:
 
   attribution-service:
     build:
-      context: ./services
-      dockerfile: ./attribution-service/Dockerfile
+      context: .
+      dockerfile: ./services/attribution-service/Dockerfile
     image: ecommerce/attribution-service:local
     ports:
       - "8085:8080"
@@ -148,8 +148,8 @@ services:
 
   audit-service:
     build:
-      context: ./services
-      dockerfile: ./audit-service/Dockerfile
+      context: .
+      dockerfile: ./services/audit-service/Dockerfile
     image: ecommerce/audit-service:local
     ports:
       - "8086:8080"
@@ -162,8 +162,8 @@ services:
 
   cart-service:
     build:
-      context: ./services
-      dockerfile: ./cart-service/Dockerfile
+      context: .
+      dockerfile: ./services/cart-service/Dockerfile
     image: ecommerce/cart-service:local
     ports:
       - "8087:8080"
@@ -176,8 +176,8 @@ services:
 
   conversion-webhook:
     build:
-      context: ./services
-      dockerfile: ./conversion-webhook/Dockerfile
+      context: .
+      dockerfile: ./services/conversion-webhook/Dockerfile
     image: ecommerce/conversion-webhook:local
     ports:
       - "8088:8080"
@@ -190,8 +190,8 @@ services:
 
   feature-flag-service:
     build:
-      context: ./services
-      dockerfile: ./feature-flag-service/Dockerfile
+      context: .
+      dockerfile: ./services/feature-flag-service/Dockerfile
     image: ecommerce/feature-flag-service:local
     ports:
       - "8089:8080"
@@ -204,8 +204,8 @@ services:
 
   landing-service:
     build:
-      context: ./services
-      dockerfile: ./landing-service/Dockerfile
+      context: .
+      dockerfile: ./services/landing-service/Dockerfile
     image: ecommerce/landing-service:local
     ports:
       - "8090:8080"
@@ -218,8 +218,8 @@ services:
 
   notification-service:
     build:
-      context: ./services
-      dockerfile: ./notification-service/Dockerfile
+      context: .
+      dockerfile: ./services/notification-service/Dockerfile
     image: ecommerce/notification-service:local
     ports:
       - "8091:8080"
@@ -232,8 +232,8 @@ services:
 
   offer-service:
     build:
-      context: ./services
-      dockerfile: ./offer-service/Dockerfile
+      context: .
+      dockerfile: ./services/offer-service/Dockerfile
     image: ecommerce/offer-service:local
     ports:
       - "8092:8080"
@@ -246,8 +246,8 @@ services:
 
   redirect-service:
     build:
-      context: ./services
-      dockerfile: ./redirect-service/Dockerfile
+      context: .
+      dockerfile: ./services/redirect-service/Dockerfile
     image: ecommerce/redirect-service:local
     ports:
       - "8093:8080"
@@ -260,8 +260,8 @@ services:
 
   reporting-service:
     build:
-      context: ./services
-      dockerfile: ./reporting-service/Dockerfile
+      context: .
+      dockerfile: ./services/reporting-service/Dockerfile
     image: ecommerce/reporting-service:local
     ports:
       - "8094:8080"
@@ -274,8 +274,8 @@ services:
 
   storefront-service:
     build:
-      context: ./services
-      dockerfile: ./storefront-service/Dockerfile
+      context: .
+      dockerfile: ./services/storefront-service/Dockerfile
     image: ecommerce/storefront-service:local
     ports:
       - "8095:8080"
