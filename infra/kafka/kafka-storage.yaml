@@ -1,0 +1,16 @@
+# infra/kafka/kafka-storage.yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: kafka-fast-storage
+  labels:
+    app: kafka
+# Provisioner for GKE (Google Cloud). 
+# For EKS use: ebs.csi.aws.com
+# For AKS use: disk.csi.azure.com
+provisioner: pd.csi.storage.gke.io
+parameters:
+  type: pd-balanced  # Balanced between cost and performance
+  replication-type: none
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
