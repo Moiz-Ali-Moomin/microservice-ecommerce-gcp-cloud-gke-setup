@@ -1,0 +1,158 @@
+# syntax=docker/dockerfile:1
+
+# ============================================================
+# UNIFIED BUILDER - Compiles ALL service binaries in one stage
+# ============================================================
+FROM golang:1.24 AS builder
+
+WORKDIR /app
+
+# 1. Copy entire services directory (includes shared-lib and all services)
+COPY services ./services
+
+# 2. Download all dependencies once
+WORKDIR /app/services
+RUN --mount=type=cache,target=/go/pkg/mod \
+    for d in */; do \
+    if [ -f "$d/go.mod" ]; then \
+    echo "Downloading deps for $d" && \
+    (cd "$d" && go mod download); \
+    fi \
+    done
+
+# 3. Build ALL binaries
+WORKDIR /app/services
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/admin-backoffice-service ./admin-backoffice-service/main.go && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/analytics-ingest-service ./analytics-ingest-service/cmd/main.go && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/api-gateway ./api-gateway/cmd/main.go && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/attribution-service ./attribution-service/cmd/main.go && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/audit-service ./audit-service/cmd/main.go && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/auth-service ./auth-service/cmd/main.go && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/cart-service ./cart-service/cmd/main.go && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/conversion-webhook ./conversion-webhook/cmd/main.go && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/feature-flag-service ./feature-flag-service/cmd/main.go && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/landing-service ./landing-service/cmd/main.go && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/notification-service ./notification-service/cmd/main.go && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/offer-service ./offer-service/cmd/main.go && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/redirect-service ./redirect-service/cmd/main.go && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/reporting-service ./reporting-service/cmd/main.go && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/storefront-service ./storefront-service/cmd/main.go && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /binaries/user-service ./user-service/cmd/main.go
+
+# ============================================================
+# RUNTIME STAGES - One per service, just copies the binary
+# ============================================================
+
+FROM gcr.io/distroless/static-debian12:nonroot AS admin-backoffice-service
+WORKDIR /app
+COPY --from=builder /binaries/admin-backoffice-service /app/server
+USER nonroot
+EXPOSE 8080
+ENTRYPOINT ["/app/server"]
+
+FROM gcr.io/distroless/static-debian12:nonroot AS analytics-ingest-service
+WORKDIR /app
+COPY --from=builder /binaries/analytics-ingest-service /app/server
+USER nonroot
+EXPOSE 8080
+ENTRYPOINT ["/app/server"]
+
+FROM gcr.io/distroless/static-debian12:nonroot AS api-gateway
+WORKDIR /app
+COPY --from=builder /binaries/api-gateway /app/server
+USER nonroot
+EXPOSE 8080
+ENTRYPOINT ["/app/server"]
+
+FROM gcr.io/distroless/static-debian12:nonroot AS attribution-service
+WORKDIR /app
+COPY --from=builder /binaries/attribution-service /app/server
+USER nonroot
+EXPOSE 8080
+ENTRYPOINT ["/app/server"]
+
+FROM gcr.io/distroless/static-debian12:nonroot AS audit-service
+WORKDIR /app
+COPY --from=builder /binaries/audit-service /app/server
+USER nonroot
+EXPOSE 8080
+ENTRYPOINT ["/app/server"]
+
+FROM gcr.io/distroless/static-debian12:nonroot AS auth-service
+WORKDIR /app
+COPY --from=builder /binaries/auth-service /app/server
+USER nonroot
+EXPOSE 8080
+ENTRYPOINT ["/app/server"]
+
+FROM gcr.io/distroless/static-debian12:nonroot AS cart-service
+WORKDIR /app
+COPY --from=builder /binaries/cart-service /app/server
+USER nonroot
+EXPOSE 8080
+ENTRYPOINT ["/app/server"]
+
+FROM gcr.io/distroless/static-debian12:nonroot AS conversion-webhook
+WORKDIR /app
+COPY --from=builder /binaries/conversion-webhook /app/server
+USER nonroot
+EXPOSE 8080
+ENTRYPOINT ["/app/server"]
+
+FROM gcr.io/distroless/static-debian12:nonroot AS feature-flag-service
+WORKDIR /app
+COPY --from=builder /binaries/feature-flag-service /app/server
+USER nonroot
+EXPOSE 8080
+ENTRYPOINT ["/app/server"]
+
+FROM gcr.io/distroless/static-debian12:nonroot AS landing-service
+WORKDIR /app
+COPY --from=builder /binaries/landing-service /app/server
+USER nonroot
+EXPOSE 8080
+ENTRYPOINT ["/app/server"]
+
+FROM gcr.io/distroless/static-debian12:nonroot AS notification-service
+WORKDIR /app
+COPY --from=builder /binaries/notification-service /app/server
+USER nonroot
+EXPOSE 8080
+ENTRYPOINT ["/app/server"]
+
+FROM gcr.io/distroless/static-debian12:nonroot AS offer-service
+WORKDIR /app
+COPY --from=builder /binaries/offer-service /app/server
+USER nonroot
+EXPOSE 8080
+ENTRYPOINT ["/app/server"]
+
+FROM gcr.io/distroless/static-debian12:nonroot AS redirect-service
+WORKDIR /app
+COPY --from=builder /binaries/redirect-service /app/server
+USER nonroot
+EXPOSE 8080
+ENTRYPOINT ["/app/server"]
+
+FROM gcr.io/distroless/static-debian12:nonroot AS reporting-service
+WORKDIR /app
+COPY --from=builder /binaries/reporting-service /app/server
+USER nonroot
+EXPOSE 8080
+ENTRYPOINT ["/app/server"]
+
+FROM gcr.io/distroless/static-debian12:nonroot AS storefront-service
+WORKDIR /app
+COPY --from=builder /binaries/storefront-service /app/server
+USER nonroot
+EXPOSE 8080
+ENTRYPOINT ["/app/server"]
+
+FROM gcr.io/distroless/static-debian12:nonroot AS user-service
+WORKDIR /app
+COPY --from=builder /binaries/user-service /app/server
+USER nonroot
+EXPOSE 8080
+ENTRYPOINT ["/app/server"]

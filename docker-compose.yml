@@ -14,7 +14,6 @@ services:
     ports:
       - "9092:9092"
     environment:
-      # KRaft settings - Standard Kafka Env Vars (no CFG prefix)
       - KAFKA_NODE_ID=0
       - KAFKA_PROCESS_ROLES=controller,broker
       - KAFKA_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
@@ -50,18 +49,19 @@ services:
       "
 
   # ===============================================================
-  # GO MICROSERVICES
+  # GO MICROSERVICES (Build-Once Strategy)
+  # All services use the unified Dockerfile.services with target
   # ===============================================================
   api-gateway:
     build:
       context: .
-      dockerfile: ./services/api-gateway/Dockerfile
+      dockerfile: Dockerfile.services
+      target: api-gateway
     image: ecommerce/api-gateway:local
     ports:
       - "8080:8080"
     environment:
       - KAFKA_BROKERS=kafka:9092
-      # Service URLs (Docker Compose DNS)
       - AUTH_SERVICE_URL=http://auth-service:8080
       - USER_SERVICE_URL=http://user-service:8080
       - OFFER_SERVICE_URL=http://offer-service:8080
@@ -75,11 +75,13 @@ services:
       user-service:
         condition: service_started
     networks: [ ecommerce-net ]
+    restart: unless-stopped
 
   auth-service:
     build:
       context: .
-      dockerfile: ./services/auth-service/Dockerfile
+      dockerfile: Dockerfile.services
+      target: auth-service
     image: ecommerce/auth-service:local
     ports:
       - "8081:8080"
@@ -89,11 +91,13 @@ services:
       kafka:
         condition: service_healthy
     networks: [ ecommerce-net ]
+    restart: unless-stopped
 
   user-service:
     build:
       context: .
-      dockerfile: ./services/user-service/Dockerfile
+      dockerfile: Dockerfile.services
+      target: user-service
     image: ecommerce/user-service:local
     ports:
       - "8082:8080"
@@ -103,11 +107,13 @@ services:
       kafka:
         condition: service_healthy
     networks: [ ecommerce-net ]
+    restart: unless-stopped
 
   admin-backoffice-service:
     build:
       context: .
-      dockerfile: ./services/admin-backoffice-service/Dockerfile
+      dockerfile: Dockerfile.services
+      target: admin-backoffice-service
     image: ecommerce/admin-backoffice-service:local
     ports:
       - "8083:8080"
@@ -117,11 +123,13 @@ services:
       kafka:
         condition: service_healthy
     networks: [ ecommerce-net ]
+    restart: unless-stopped
 
   analytics-ingest-service:
     build:
       context: .
-      dockerfile: ./services/analytics-ingest-service/Dockerfile
+      dockerfile: Dockerfile.services
+      target: analytics-ingest-service
     image: ecommerce/analytics-ingest-service:local
     ports:
       - "8084:8080"
@@ -131,11 +139,13 @@ services:
       kafka:
         condition: service_healthy
     networks: [ ecommerce-net ]
+    restart: unless-stopped
 
   attribution-service:
     build:
       context: .
-      dockerfile: ./services/attribution-service/Dockerfile
+      dockerfile: Dockerfile.services
+      target: attribution-service
     image: ecommerce/attribution-service:local
     ports:
       - "8085:8080"
@@ -145,11 +155,13 @@ services:
       kafka:
         condition: service_healthy
     networks: [ ecommerce-net ]
+    restart: unless-stopped
 
   audit-service:
     build:
       context: .
-      dockerfile: ./services/audit-service/Dockerfile
+      dockerfile: Dockerfile.services
+      target: audit-service
     image: ecommerce/audit-service:local
     ports:
       - "8086:8080"
@@ -159,11 +171,13 @@ services:
       kafka:
         condition: service_healthy
     networks: [ ecommerce-net ]
+    restart: unless-stopped
 
   cart-service:
     build:
       context: .
-      dockerfile: ./services/cart-service/Dockerfile
+      dockerfile: Dockerfile.services
+      target: cart-service
     image: ecommerce/cart-service:local
     ports:
       - "8087:8080"
@@ -173,11 +187,13 @@ services:
       kafka:
         condition: service_healthy
     networks: [ ecommerce-net ]
+    restart: unless-stopped
 
   conversion-webhook:
     build:
       context: .
-      dockerfile: ./services/conversion-webhook/Dockerfile
+      dockerfile: Dockerfile.services
+      target: conversion-webhook
     image: ecommerce/conversion-webhook:local
     ports:
       - "8088:8080"
@@ -187,11 +203,13 @@ services:
       kafka:
         condition: service_healthy
     networks: [ ecommerce-net ]
+    restart: unless-stopped
 
   feature-flag-service:
     build:
       context: .
-      dockerfile: ./services/feature-flag-service/Dockerfile
+      dockerfile: Dockerfile.services
+      target: feature-flag-service
     image: ecommerce/feature-flag-service:local
     ports:
       - "8089:8080"
@@ -201,11 +219,13 @@ services:
       kafka:
         condition: service_healthy
     networks: [ ecommerce-net ]
+    restart: unless-stopped
 
   landing-service:
     build:
       context: .
-      dockerfile: ./services/landing-service/Dockerfile
+      dockerfile: Dockerfile.services
+      target: landing-service
     image: ecommerce/landing-service:local
     ports:
       - "8090:8080"
@@ -215,11 +235,13 @@ services:
       kafka:
         condition: service_healthy
     networks: [ ecommerce-net ]
+    restart: unless-stopped
 
   notification-service:
     build:
       context: .
-      dockerfile: ./services/notification-service/Dockerfile
+      dockerfile: Dockerfile.services
+      target: notification-service
     image: ecommerce/notification-service:local
     ports:
       - "8091:8080"
@@ -229,11 +251,13 @@ services:
       kafka:
         condition: service_healthy
     networks: [ ecommerce-net ]
+    restart: unless-stopped
 
   offer-service:
     build:
       context: .
-      dockerfile: ./services/offer-service/Dockerfile
+      dockerfile: Dockerfile.services
+      target: offer-service
     image: ecommerce/offer-service:local
     ports:
       - "8092:8080"
@@ -243,11 +267,13 @@ services:
       kafka:
         condition: service_healthy
     networks: [ ecommerce-net ]
+    restart: unless-stopped
 
   redirect-service:
     build:
       context: .
-      dockerfile: ./services/redirect-service/Dockerfile
+      dockerfile: Dockerfile.services
+      target: redirect-service
     image: ecommerce/redirect-service:local
     ports:
       - "8093:8080"
@@ -257,11 +283,13 @@ services:
       kafka:
         condition: service_healthy
     networks: [ ecommerce-net ]
+    restart: unless-stopped
 
   reporting-service:
     build:
       context: .
-      dockerfile: ./services/reporting-service/Dockerfile
+      dockerfile: Dockerfile.services
+      target: reporting-service
     image: ecommerce/reporting-service:local
     ports:
       - "8094:8080"
@@ -271,11 +299,13 @@ services:
       kafka:
         condition: service_healthy
     networks: [ ecommerce-net ]
+    restart: unless-stopped
 
   storefront-service:
     build:
       context: .
-      dockerfile: ./services/storefront-service/Dockerfile
+      dockerfile: Dockerfile.services
+      target: storefront-service
     image: ecommerce/storefront-service:local
     ports:
       - "8095:8080"
@@ -286,3 +316,4 @@ services:
       kafka:
         condition: service_healthy
     networks: [ ecommerce-net ]
+    restart: unless-stopped
