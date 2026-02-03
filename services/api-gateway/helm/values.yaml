@@ -2,6 +2,7 @@ replicaCount: 2
 image:
   repository: us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo/api-gateway
   tag: latest
+  pullPolicy: IfNotPresent
 service:
   type: ClusterIP
   port: 8080
@@ -12,3 +13,20 @@ resources:
   limits:
     cpu: 500m
     memory: 256Mi
+
+# Autoscaling (HPA)
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+# Environment variables
+env:
+  KAFKA_BROKERS: kafka-headless.kafka.svc:9092
+
