@@ -201,6 +201,9 @@ ENTRYPOINT ["/app/server"]
 FROM gcr.io/distroless/static-debian12:nonroot AS storefront-service
 WORKDIR /app
 COPY --from=builder /binaries/storefront-service /app/server
+# Storefront needs templates and static assets at runtime
+COPY --from=builder /app/services/storefront-service/templates /app/templates
+COPY --from=builder /app/services/storefront-service/static /app/static
 USER nonroot
 EXPOSE 8080
 ENTRYPOINT ["/app/server"]
