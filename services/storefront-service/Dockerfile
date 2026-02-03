@@ -1,33 +1,32 @@
+# ---------- Builder ----------
 FROM golang:1.24 AS builder
+
 WORKDIR /app
 
-# 1. Copy global workspace files (User requirement, though we will override usage)
+# 1. Copy workspace definition
 COPY go.work go.work.sum ./
 
-# 2. Copy shared library (Dependency)
+# 2. Copy shared library (dependency layer)
 COPY services/shared-lib ./services/shared-lib
 
-# 3. Copy target service go.mod (Required for workspace init before full source copy)
-COPY services/storefront-service/go.mod ./services/storefront-service/go.mod
-
-# 4. Create a valid go.work for this build context (Prunes missing modules)
-#    We overwrite the global go.work because it references modules we haven't copied.
-RUN go work init ./services/shared-lib ./services/storefront-service && \
-    go work edit -go=1.24.0
-
-# 5. Download dependencies (Cached layer - invalidates only on go.mod changes)
+# 3. Sync workspace (read-only, deterministic)
 RUN go work sync
 
-# 6. Copy target service source code (Invalidates on code changes)
+# 4. Copy service source
 COPY services/storefront-service ./services/storefront-service
 
-# 7. Build
-RUN cd services/storefront-service && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /app/server cmd/main.go
+# 5. Build binary
+WORKDIR /app/services/storefront-service
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -ldflags="-w -s" -o /app/server cmd/main.go
 
+
+# ---------- Runtime ----------
 FROM gcr.io/distroless/static-debian12:nonroot
+
 WORKDIR /app
-COPY --from=builder /app/server .
-USER nonroot:nonroot
+COPY --from=builder /app/server /app/server
+
+USER nonroot
 EXPOSE 8080
 ENTRYPOINT ["/app/server"]
