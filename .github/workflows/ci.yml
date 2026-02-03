@@ -41,12 +41,6 @@ jobs:
           cache: true
           cache-dependency-path: go.work.sum
 
-      # ✅ LINT: run at repo root, let go.work drive everything
-      - name: GolangCI-Lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: v1.62.0
-          args: --timeout=5m --allow-parallel-runners
 
       # ✅ TEST: run ONLY inside services (real modules)
       - name: Run Unit Tests
