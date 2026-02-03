@@ -54,8 +54,8 @@ spec:
             # Format storage if not exists (Apache image specific, checking if meta.properties exists)
             if [ ! -f /var/lib/kafka/data/meta.properties ]; then
               echo "Formatting storage..."
-              # Generate uuid if not provided. ideally should be fixed for cluster recovery but for now random is ok for fresh install
-              CLUSTER_ID=$(/opt/kafka/bin/kafka-storage.sh random-uuid)
+              # Critical: All brokers must use the SAME Cluster ID to form a quorum.
+              CLUSTER_ID="MkU3OEVBNTcwNTJENDM2Qk"
               /opt/kafka/bin/kafka-storage.sh format -t $CLUSTER_ID -c /opt/kafka/config/kraft/server.properties
             fi
             
