@@ -1,0 +1,11 @@
+# Shell scripts
+*.sh text eol=lf
+
+# Docker / Compose
+Dockerfile text eol=lf
+docker-compose*.yml text eol=lf
+*.env text eol=lf
+
+# Infra configs
+*.yaml text eol=lf
+*.yml text eol=lf
