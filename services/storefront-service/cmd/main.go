@@ -28,7 +28,7 @@ func main() {
 	}
 
 	// Initialize Kafka Producer
-	brokers := strings.Split(getEnv("KAFKA_BROKERS", "kafka:9092"), ",")
+	brokers := strings.Split(getEnv("KAFKA_BROKERS", "kafka-bootstrap.kafka.svc.cluster.local:9092"), ",")
 	producer, err := event.NewProducer(brokers, "page.viewed")
 	if err != nil {
 		log.Printf("Warning: Failed to initialize Kafka producer: %v", err)

@@ -28,5 +28,5 @@ podDisruptionBudget:
 
 # Environment variables
 env:
-  KAFKA_BROKERS: kafka-headless.kafka.svc:9092
+  KAFKA_BROKERS: kafka-bootstrap.kafka.svc.cluster.local:9092
 

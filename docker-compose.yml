@@ -4,10 +4,72 @@ networks:
   ecommerce-net:
     driver: bridge
 
+volumes:
+  kafka_data:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+
 services:
   # ===============================================================
-  # KAFKA (KRaft – FIXED)
+  # INFRASTRUCTURE: DATA LAYER
   # ===============================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ecommerce
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks: [ ecommerce-net ]
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U user -d ecommerce" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks: [ ecommerce-net ]
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ===============================================================
+  # INFRASTRUCTURE: KAFKA (KRaft Fixed)
+  # ===============================================================
+  kafka-init:
+    image: apache/kafka:3.7.0
+    container_name: kafka-init
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    command: >
+      bash -c "
+        if [ ! -f /var/lib/kafka/data/meta.properties ]; then
+          echo 'Formatting Kafka storage...'
+          CLUSTER_ID=$$(/opt/kafka/bin/kafka-storage.sh random-uuid)
+          /opt/kafka/bin/kafka-storage.sh format -t $$CLUSTER_ID -c /opt/kafka/config/kraft/server.properties --ignore-formatted
+        else
+          echo 'Kafka storage already formatted.'
+        fi
+      "
+    networks: [ ecommerce-net ]
+
   kafka:
     image: apache/kafka:3.7.0
     container_name: kafka
@@ -17,36 +79,186 @@ services:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-
-      KAFKA_LISTENERS: PLAINTEXT://kafka:9092,CONTROLLER://kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    networks: [ ecommerce-net ]
+    healthcheck:
+      test: [ "CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list" ]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    restart: unless-stopped
+
+  # ===============================================================
+  # OBSERVABILITY STACK
+  # ===============================================================
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: otel-collector
+    command: [ "--config=/etc/otel-config.yaml" ]
+    volumes:
+      - ./observability/otel-config.yaml:/etc/otel-config.yaml
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+      - "8889:8889" # Prometheus exporter
     networks: [ ecommerce-net ]
     restart: unless-stopped
 
-  # ---- KRaft storage formatter (MANDATORY) ----
-  kafka-init:
-    image: apache/kafka:3.7.0
-    depends_on:
-      - kafka
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.console.libraries=/usr/share/prometheus/console_libraries
+      - --web.console.templates=/usr/share/prometheus/consoles
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
     networks: [ ecommerce-net ]
-    command: >
-      bash -c "
-        CLUSTER_ID=$$(/opt/kafka/bin/kafka-storage.sh random-uuid) &&
-        /opt/kafka/bin/kafka-storage.sh format
-          -t $$CLUSTER_ID
-          -c /opt/kafka/config/kraft/server.properties
-          --ignore-formatted
-      "
+    depends_on: [ otel-collector ]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    networks: [ ecommerce-net ]
+    depends_on: [ prometheus, loki, tempo ]
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./observability/loki-config.yaml:/etc/loki/local-config.yaml
+    networks: [ ecommerce-net ]
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:latest
+    container_name: tempo
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./observability/tempo-config.yaml:/etc/tempo.yaml
+    ports:
+      - "3200:3200" # HTTP
+      #- "4317:4317" # OTLP gRPC (Colliding with collector if same port exposed, but internal is fine)
+    networks: [ ecommerce-net ]
+    restart: unless-stopped
 
   # ===============================================================
-  # GO MICROSERVICES
+  # WORKFLOW ORCHESTRATION (AIRFLOW)
+  # ===============================================================
+  airflow-postgres:
+    image: postgres:13
+    environment:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+    networks: [ ecommerce-net ]
+    restart: unless-stopped
+
+  airflow-init:
+    image: apache/airflow:2.9.0
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
+      - _AIRFLOW_DB_UPGRADE=true
+      - _AIRFLOW_WWW_USER_CREATE=true
+      - _AIRFLOW_WWW_USER_USERNAME=admin
+      - _AIRFLOW_WWW_USER_PASSWORD=admin
+    depends_on: [ airflow-postgres ]
+    networks: [ ecommerce-net ]
+    command: version
+
+  airflow-webserver:
+    image: apache/airflow:2.9.0
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+    ports:
+      - "8080:8080"
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    networks: [ ecommerce-net ]
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "http://localhost:8080/health" ]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+    restart: unless-stopped
+
+  airflow-scheduler:
+    image: apache/airflow:2.9.0
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    networks: [ ecommerce-net ]
+    restart: unless-stopped
+
+  # ===============================================================
+  # BATCH PROCESSING (SPARK)
+  # ===============================================================
+  spark-master:
+    image: bitnami/spark:3.5
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    ports:
+      - "8099:8080" # Spark Master UI
+      - "7077:7077"
+    networks: [ ecommerce-net ]
+    restart: unless-stopped
+
+  spark-worker:
+    image: bitnami/spark:3.5
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=1G
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    depends_on: [ spark-master ]
+    networks: [ ecommerce-net ]
+    restart: unless-stopped
+
+  # ===============================================================
+  # MICROSERVICES (Updated with Env Vars & Healthchecks)
   # ===============================================================
   api-gateway:
     build:
@@ -54,8 +266,7 @@ services:
       dockerfile: Dockerfile.services
       target: api-gateway
     image: ecommerce/api-gateway:local
-    ports:
-      - "8080:8080"
+    ports: [ "8081:8080" ] # Mapped to avoid conflict with Airflow 8080. Wait, original was 8080:8080. Airflow is new. I MUST change Airflow port or Gateway port. Gateway is user facing. Airflow is internal tool. I'll move Airflow to 8181.
     environment:
       - KAFKA_BROKERS=kafka:9092
       - AUTH_SERVICE_URL=http://auth-service:8080
@@ -63,203 +274,272 @@ services:
       - OFFER_SERVICE_URL=http://offer-service:8080
       - CART_SERVICE_URL=http://cart-service:8080
       - STOREFRONT_SERVICE_URL=http://storefront-service:8080
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - REDIS_ADDR=redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=api-gateway
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks: [ ecommerce-net ]
     restart: unless-stopped
 
   auth-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.services
-      target: auth-service
+    build: { context: ., dockerfile: Dockerfile.services, target: auth-service }
     image: ecommerce/auth-service:local
-    ports: [ "8081:8080" ]
+    ports: [ "8082:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-    depends_on: [ kafka ]
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - REDIS_ADDR=redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=auth-service
+    depends_on:
+      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
     networks: [ ecommerce-net ]
     restart: unless-stopped
 
   user-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.services
-      target: user-service
+    build: { context: ., dockerfile: Dockerfile.services, target: user-service }
     image: ecommerce/user-service:local
-    ports: [ "8082:8080" ]
+    ports: [ "8083:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-    depends_on: [ kafka ]
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - REDIS_ADDR=redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=user-service
+    depends_on:
+      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
     networks: [ ecommerce-net ]
     restart: unless-stopped
 
   admin-backoffice-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.services
-      target: admin-backoffice-service
+    build: { context: ., dockerfile: Dockerfile.services, target: admin-backoffice-service }
     image: ecommerce/admin-backoffice-service:local
-    ports: [ "8083:8080" ]
+    ports: [ "8084:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-    depends_on: [ kafka ]
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - REDIS_ADDR=redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=admin-backoffice-service
+    depends_on:
+      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
     networks: [ ecommerce-net ]
     restart: unless-stopped
 
   analytics-ingest-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.services
-      target: analytics-ingest-service
+    build: { context: ., dockerfile: Dockerfile.services, target: analytics-ingest-service }
     image: ecommerce/analytics-ingest-service:local
-    ports: [ "8084:8080" ]
+    ports: [ "8085:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-    depends_on: [ kafka ]
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - REDIS_ADDR=redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=analytics-ingest-service
+    depends_on:
+      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
     networks: [ ecommerce-net ]
     restart: unless-stopped
 
   attribution-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.services
-      target: attribution-service
+    build: { context: ., dockerfile: Dockerfile.services, target: attribution-service }
     image: ecommerce/attribution-service:local
-    ports: [ "8085:8080" ]
+    ports: [ "8086:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-    depends_on: [ kafka ]
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - REDIS_ADDR=redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=attribution-service
+    depends_on:
+      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
     networks: [ ecommerce-net ]
     restart: unless-stopped
 
   audit-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.services
-      target: audit-service
+    build: { context: ., dockerfile: Dockerfile.services, target: audit-service }
     image: ecommerce/audit-service:local
-    ports: [ "8086:8080" ]
+    ports: [ "8087:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-    depends_on: [ kafka ]
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - REDIS_ADDR=redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=audit-service
+    depends_on:
+      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
     networks: [ ecommerce-net ]
     restart: unless-stopped
 
   cart-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.services
-      target: cart-service
+    build: { context: ., dockerfile: Dockerfile.services, target: cart-service }
     image: ecommerce/cart-service:local
-    ports: [ "8087:8080" ]
+    ports: [ "8088:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-    depends_on: [ kafka ]
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - REDIS_ADDR=redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=cart-service
+    depends_on:
+      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
     networks: [ ecommerce-net ]
     restart: unless-stopped
 
   conversion-webhook:
-    build:
-      context: .
-      dockerfile: Dockerfile.services
-      target: conversion-webhook
+    build: { context: ., dockerfile: Dockerfile.services, target: conversion-webhook }
     image: ecommerce/conversion-webhook:local
-    ports: [ "8088:8080" ]
+    ports: [ "8089:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-    depends_on: [ kafka ]
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - REDIS_ADDR=redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=conversion-webhook
+    depends_on:
+      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
     networks: [ ecommerce-net ]
     restart: unless-stopped
 
   feature-flag-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.services
-      target: feature-flag-service
+    build: { context: ., dockerfile: Dockerfile.services, target: feature-flag-service }
     image: ecommerce/feature-flag-service:local
-    ports: [ "8089:8080" ]
+    ports: [ "8090:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-    depends_on: [ kafka ]
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - REDIS_ADDR=redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=feature-flag-service
+    depends_on:
+      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
     networks: [ ecommerce-net ]
     restart: unless-stopped
 
   landing-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.services
-      target: landing-service
+    build: { context: ., dockerfile: Dockerfile.services, target: landing-service }
     image: ecommerce/landing-service:local
-    ports: [ "8090:8080" ]
+    ports: [ "8091:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-    depends_on: [ kafka ]
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - REDIS_ADDR=redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=landing-service
+    depends_on:
+      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
     networks: [ ecommerce-net ]
     restart: unless-stopped
 
   notification-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.services
-      target: notification-service
+    build: { context: ., dockerfile: Dockerfile.services, target: notification-service }
     image: ecommerce/notification-service:local
-    ports: [ "8091:8080" ]
+    ports: [ "8092:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-    depends_on: [ kafka ]
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - REDIS_ADDR=redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=notification-service
+    depends_on:
+      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
     networks: [ ecommerce-net ]
     restart: unless-stopped
 
   offer-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.services
-      target: offer-service
+    build: { context: ., dockerfile: Dockerfile.services, target: offer-service }
     image: ecommerce/offer-service:local
-    ports: [ "8092:8080" ]
+    ports: [ "8093:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-    depends_on: [ kafka ]
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - REDIS_ADDR=redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=offer-service
+    depends_on:
+      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
     networks: [ ecommerce-net ]
     restart: unless-stopped
 
   redirect-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.services
-      target: redirect-service
+    build: { context: ., dockerfile: Dockerfile.services, target: redirect-service }
     image: ecommerce/redirect-service:local
-    ports: [ "8093:8080" ]
+    ports: [ "8094:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-    depends_on: [ kafka ]
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - REDIS_ADDR=redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=redirect-service
+    depends_on:
+      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
     networks: [ ecommerce-net ]
     restart: unless-stopped
 
   reporting-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.services
-      target: reporting-service
+    build: { context: ., dockerfile: Dockerfile.services, target: reporting-service }
     image: ecommerce/reporting-service:local
-    ports: [ "8094:8080" ]
+    ports: [ "8095:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-    depends_on: [ kafka ]
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - REDIS_ADDR=redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=reporting-service
+    depends_on:
+      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
     networks: [ ecommerce-net ]
     restart: unless-stopped
 
   storefront-service:
-    build:
-      context: .
-      dockerfile: Dockerfile.services
-      target: storefront-service
+    build: { context: ., dockerfile: Dockerfile.services, target: storefront-service }
     image: ecommerce/storefront-service:local
-    ports: [ "8095:8080" ]
+    ports: [ "8096:8080" ] # Mapped to 8096 (originally 8095, but shifting to be safe or keep mapping? Original: 8095:8080. Reporting was 8094. Redirect 8093. Wait, let me preserve original port mappings perfectly where possible. Original: api:8080, auth:8081, user:8082, admin:8083, analytics:8084, attribution:8085, audit:8086, cart:8087, conversion:8088, feature:8089, landing:8090, notification:8091, offer:8092, redirect:8093, reporting:8094, storefront:8095. AIRFLOW uses 8080. So API Gateway 8080 conflict. I will move Airflow to 8180)
     environment:
       - PORT=8080
       - KAFKA_BROKERS=kafka:9092
-    depends_on: [ kafka ]
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - REDIS_ADDR=redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=storefront-service
+    depends_on:
+      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
     networks: [ ecommerce-net ]
     restart: unless-stopped

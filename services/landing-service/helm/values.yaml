@@ -6,7 +6,7 @@ service:
   type: ClusterIP
   port: 8080
 env:
-  KAFKA_BROKERS: "kafka-0.kafka-headless.kafka.svc:9092"
+  KAFKA_BROKERS: "kafka-bootstrap.kafka.svc.cluster.local:9092"
 resources:
   requests:
     cpu: 200m
