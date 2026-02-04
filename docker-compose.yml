@@ -163,7 +163,7 @@ services:
     container_name: tempo
     command: [ "-config.file=/etc/tempo.yaml" ]
     volumes:
-      - ./observability/tempo-config.yaml:/etc/tempo.yaml
+      - ./observability/tempo.yaml:/etc/tempo.yaml
     ports:
       - "3200:3200" # HTTP
       #- "4317:4317" # OTLP gRPC (Colliding with collector if same port exposed, but internal is fine)
