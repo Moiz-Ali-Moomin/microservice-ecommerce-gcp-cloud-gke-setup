@@ -36,7 +36,7 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.2-alpine
     container_name: redis
     ports:
       - "6379:6379"
@@ -105,7 +105,7 @@ services:
   # OBSERVABILITY STACK
   # ===============================================================
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
+    image: otel/opentelemetry-collector-contrib:0.96.0
     container_name: otel-collector
     command: [ "--config=/etc/otel-config.yaml" ]
     volumes:
@@ -118,7 +118,7 @@ services:
     restart: unless-stopped
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.50.1
     container_name: prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -135,7 +135,7 @@ services:
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:10.3.1
     container_name: grafana
     ports:
       - "3000:3000"
@@ -148,7 +148,7 @@ services:
     restart: unless-stopped
 
   loki:
-    image: grafana/loki:latest
+    image: grafana/loki:2.9.4
     container_name: loki
     ports:
       - "3100:3100"
@@ -159,7 +159,7 @@ services:
     restart: unless-stopped
 
   tempo:
-    image: grafana/tempo:latest
+    image: grafana/tempo:2.4.1
     container_name: tempo
     command: [ "-config.file=/etc/tempo.yaml" ]
     volumes:
@@ -174,7 +174,7 @@ services:
   # WORKFLOW ORCHESTRATION (AIRFLOW)
   # ===============================================================
   airflow-postgres:
-    image: postgres:13
+    image: postgres:15-alpine
     environment:
       - POSTGRES_USER=airflow
       - POSTGRES_PASSWORD=airflow
@@ -234,7 +234,7 @@ services:
   # BATCH PROCESSING (SPARK)
   # ===============================================================
   spark-master:
-    image: bitnami/spark:3.5
+    image: bitnami/spark:3.5.0
     environment:
       - SPARK_MODE=master
       - SPARK_RPC_AUTHENTICATION_ENABLED=no
@@ -246,7 +246,7 @@ services:
     restart: unless-stopped
 
   spark-worker:
-    image: bitnami/spark:3.5
+    image: bitnami/spark:3.5.0
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
