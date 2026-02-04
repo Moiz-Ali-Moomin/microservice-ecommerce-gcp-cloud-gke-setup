@@ -17,13 +17,6 @@ overrides:
     metrics_generator:
       processors: [service-graphs, span-metrics] # Enable service graphs
 
-distributor:
-  receivers:
-    otlp:
-      protocols:
-        grpc:
-        http:
-
 ingester:
   trace_idle_period: 10s
   max_block_duration: 5m

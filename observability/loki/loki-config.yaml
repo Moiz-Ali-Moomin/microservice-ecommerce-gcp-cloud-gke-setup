@@ -25,18 +25,6 @@ compactor:
   shared_store: filesystem
   retention_enabled: true
 
-common:
-  instance_addr: 127.0.0.1
-  path_prefix: /tmp/loki
-  storage:
-    filesystem:
-      chunks_directory: /tmp/loki/chunks
-      rules_directory: /tmp/loki/rules
-  replication_factor: 1
-  ring:
-    kvstore:
-      store: inmemory
-
 query_range:
   results_cache:
     cache:
