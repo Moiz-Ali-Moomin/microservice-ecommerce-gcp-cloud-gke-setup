@@ -158,6 +158,20 @@ services:
     networks: [ ecommerce-net ]
     restart: unless-stopped
 
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: node-exporter
+    command:
+      - '--path.rootfs=/host'
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    ports:
+      - "9100:9100"
+    networks:
+      - ecommerce-net
+    restart: unless-stopped
+
   tempo:
     image: grafana/tempo:2.4.1
     container_name: tempo
@@ -193,6 +207,8 @@ services:
       - _AIRFLOW_WWW_USER_PASSWORD=admin
     depends_on: [ airflow-postgres ]
     networks: [ ecommerce-net ]
+    volumes:
+      - ./infra/airflow/dags:/opt/airflow/dags
     command: version
 
   airflow-webserver:
@@ -203,7 +219,7 @@ services:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
     volumes:
-      - ./airflow/dags:/opt/airflow/dags
+      - ./infra/airflow/dags:/opt/airflow/dags
     ports:
       - "8080:8080"
     depends_on:
@@ -225,7 +241,7 @@ services:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
     volumes:
-      - ./airflow/dags:/opt/airflow/dags
+      - ./infra/airflow/dags:/opt/airflow/dags
     depends_on:
       airflow-init:
         condition: service_completed_successfully

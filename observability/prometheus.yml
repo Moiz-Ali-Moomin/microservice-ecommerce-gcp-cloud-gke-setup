@@ -9,3 +9,8 @@ scrape_configs:
   - job_name: 'kafka'
     static_configs:
       - targets: ['kafka:9308'] # Assuming JMX exporter or similar if needed, but primarily relying on OTEL for app metrics
+
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets:
+          - 'node-exporter:9100'

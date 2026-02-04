@@ -1,0 +1,13 @@
+# Add this to your Prometheus ConfigMap scrape_configs:
+# This assumes you have RBAC permissions for Prometheus to discover endpoints.
+
+- job_name: 'kubernetes-endpoints'
+  kubernetes_sd_configs:
+  - role: endpoints
+  relabel_configs:
+  - source_labels: [__meta_kubernetes_service_label_app]
+    regex: node-exporter
+    action: keep
+  - source_labels: [__meta_kubernetes_endpoint_port_name]
+    regex: metrics
+    action: keep
