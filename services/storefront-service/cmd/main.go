@@ -4,71 +4,50 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"io"
 	"log"
 	"math/rand"
 	"net/http"
 	"os"
+	"strings"
 	"time"
+
+	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/event"
+	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/logger"
+	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/storefront-service/internal/handler"
+	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/storefront-service/internal/service"
 )
 
-// Config holds service configuration
-type Config struct {
-	Port       string
-	GatewayURL string
-}
-
-// Offer represents a product offer
-type Offer struct {
-	ID          string  `json:"id"`
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	Payout      float64 `json:"payout"` // Acting as Price for the demo
-	VendorID    string  `json:"vendor_id"`
-	Category    string  `json:"category"`
-}
-
-// CartItem represents an item in the cart
-type CartItem struct {
-	OfferID  string  `json:"offer_id"`
-	VendorID string  `json:"vendor_id"`
-	Price    float64 `json:"price"`
-	Title    string  `json:"title"` // Enriched
-	Quantity int     `json:"quantity"`
-}
-
-// Cart represents the user's cart
-type Cart struct {
-	UserID string     `json:"user_id"`
-	Items  []CartItem `json:"items"`
-}
-
-// Auth Response from API Gateway/Auth Service
-type AuthResponse struct {
-	Token    string `json:"token"`
-	Username string `json:"username"`
-}
-
-// Global FuncMap
-var funcMap = template.FuncMap{
-	"mul": func(a float64, b int) float64 {
-		return a * float64(b)
-	},
-}
-
 func main() {
-	config := Config{
+	// Initialize Logger
+	logger.Init("storefront-service")
+
+	config := handler.Config{
 		Port:       getEnv("PORT", "3000"),
 		GatewayURL: getEnv("GATEWAY_URL", "http://api-gateway:8080"),
 	}
+
+	// Initialize Kafka Producer
+	brokers := strings.Split(getEnv("KAFKA_BROKERS", "kafka:9092"), ",")
+	producer, err := event.NewProducer(brokers, "page.viewed")
+	if err != nil {
+		log.Printf("Warning: Failed to initialize Kafka producer: %v", err)
+		// Proceed without Kafka (producer will be nil)
+	} else {
+		defer producer.Close()
+		log.Printf("Connected to Kafka brokers at %s", brokers)
+	}
+
+	// Initialize Services & Handler
+	analyticsService := service.NewAnalyticsService(producer)
+	h := handler.NewHandler(analyticsService, config)
 
 	// Static Files
 	fs := http.FileServer(http.Dir("./static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 
 	// Routes
-	http.HandleFunc("/", handleHome(config))
+	http.HandleFunc("/", h.Home) // Use new handler
 	http.HandleFunc("/login", handleLogin(config))
 	http.HandleFunc("/signup", handleSignup(config))
 	http.HandleFunc("/logout", handleLogout())
@@ -85,60 +64,10 @@ func main() {
 	log.Fatal(http.ListenAndServe(":"+config.Port, nil))
 }
 
-func render(w http.ResponseWriter, tmplName string, data interface{}) {
-	tmpl, err := template.New("layout.html").Funcs(funcMap).ParseFiles("templates/layout.html", "templates/"+tmplName)
-	if err != nil {
-		log.Printf("Template Parsing Error: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	if err := tmpl.Execute(w, data); err != nil {
-		log.Printf("Template Execution Error: %v", err)
-	}
-}
-
-// Helper to get authenticated user from cookie
-func getAuthenticatedUser(r *http.Request) string {
-	cookie, err := r.Cookie("auth_user")
-	if err != nil {
-		return ""
-	}
-	return cookie.Value
-}
-
-func handleHome(cfg Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		username := getAuthenticatedUser(r)
-
-		// Fetch offers from API Gateway
-		resp, err := http.Get(cfg.GatewayURL + "/api/v1/offers")
-		if err != nil {
-			log.Printf("Error fetching offers: %v", err)
-			http.Error(w, "Failed to fetch products", http.StatusServiceUnavailable)
-			return
-		}
-		defer resp.Body.Close()
-
-		var offers []Offer
-		if resp.StatusCode == http.StatusOK {
-			json.NewDecoder(resp.Body).Decode(&offers)
-		}
-
-		data := map[string]interface{}{
-			"Title":  "Home",
-			"Offers": offers,
-			"User":   username,
-		}
-
-		render(w, "home.html", data)
-	}
-}
-
-func handleLogin(cfg Config) http.HandlerFunc {
+func handleLogin(cfg handler.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
-			render(w, "login.html", map[string]interface{}{"Title": "Login"})
+			handler.Render(w, "login.html", map[string]interface{}{"Title": "Login"})
 			return
 		}
 
@@ -153,7 +82,7 @@ func handleLogin(cfg Config) http.HandlerFunc {
 
 		resp, err := http.Post(cfg.GatewayURL+"/api/v1/login", "application/json", bytes.NewBuffer(authBody))
 		if err != nil || resp.StatusCode != http.StatusOK {
-			render(w, "login.html", map[string]interface{}{
+			handler.Render(w, "login.html", map[string]interface{}{
 				"Title": "Login",
 				"Error": "Invalid credentials",
 			})
@@ -161,7 +90,7 @@ func handleLogin(cfg Config) http.HandlerFunc {
 		}
 		defer resp.Body.Close()
 
-		var authResp AuthResponse
+		var authResp handler.AuthResponse
 		json.NewDecoder(resp.Body).Decode(&authResp)
 
 		// Set Cookies
@@ -172,10 +101,10 @@ func handleLogin(cfg Config) http.HandlerFunc {
 	}
 }
 
-func handleSignup(cfg Config) http.HandlerFunc {
+func handleSignup(cfg handler.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
-			render(w, "signup.html", map[string]interface{}{"Title": "Create Account"})
+			handler.Render(w, "signup.html", map[string]interface{}{"Title": "Create Account"})
 			return
 		}
 
@@ -190,7 +119,7 @@ func handleSignup(cfg Config) http.HandlerFunc {
 
 		resp, err := http.Post(cfg.GatewayURL+"/api/v1/signup", "application/json", bytes.NewBuffer(authBody))
 		if err != nil || resp.StatusCode != http.StatusCreated {
-			render(w, "signup.html", map[string]interface{}{
+			handler.Render(w, "signup.html", map[string]interface{}{
 				"Title": "Create Account",
 				"Error": "Failed to create account (User may exist)",
 			})
@@ -211,9 +140,9 @@ func handleLogout() http.HandlerFunc {
 	}
 }
 
-func handleCart(cfg Config) http.HandlerFunc {
+func handleCart(cfg handler.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := getAuthenticatedUser(r)
+		userID := handler.GetAuthenticatedUser(r)
 		if userID == "" {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
@@ -224,7 +153,7 @@ func handleCart(cfg Config) http.HandlerFunc {
 		client := &http.Client{Timeout: 5 * time.Second}
 		resp, err := client.Do(req)
 
-		var cart Cart
+		var cart handler.Cart
 		if err == nil && resp.StatusCode == http.StatusOK {
 			json.NewDecoder(resp.Body).Decode(&cart)
 			resp.Body.Close()
@@ -232,9 +161,9 @@ func handleCart(cfg Config) http.HandlerFunc {
 
 		// 2. Fetch Offers
 		respOffers, err := http.Get(cfg.GatewayURL + "/api/v1/offers")
-		offersMap := make(map[string]Offer)
+		offersMap := make(map[string]handler.Offer)
 		if err == nil && respOffers.StatusCode == http.StatusOK {
-			var offers []Offer
+			var offers []handler.Offer
 			json.NewDecoder(respOffers.Body).Decode(&offers)
 			respOffers.Body.Close()
 			for _, o := range offers {
@@ -262,13 +191,13 @@ func handleCart(cfg Config) http.HandlerFunc {
 			"User":  userID,
 		}
 
-		render(w, "cart.html", data)
+		handler.Render(w, "cart.html", data)
 	}
 }
 
-func handleCheckout(cfg Config) http.HandlerFunc {
+func handleCheckout(cfg handler.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := getAuthenticatedUser(r)
+		userID := handler.GetAuthenticatedUser(r)
 		if userID == "" {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
@@ -280,16 +209,16 @@ func handleCheckout(cfg Config) http.HandlerFunc {
 
 		total := 0.0
 		if resp != nil && resp.StatusCode == http.StatusOK {
-			var cart Cart
+			var cart handler.Cart
 			json.NewDecoder(resp.Body).Decode(&cart)
 			resp.Body.Close()
 
 			respOffers, _ := http.Get(cfg.GatewayURL + "/api/v1/offers")
 			if respOffers != nil && respOffers.StatusCode == http.StatusOK {
-				var offers []Offer
+				var offers []handler.Offer
 				json.NewDecoder(respOffers.Body).Decode(&offers)
 				respOffers.Body.Close()
-				offersMap := make(map[string]Offer)
+				offersMap := make(map[string]handler.Offer)
 				for _, o := range offers {
 					offersMap[o.ID] = o
 				}
@@ -301,7 +230,7 @@ func handleCheckout(cfg Config) http.HandlerFunc {
 			}
 		}
 
-		render(w, "payment.html", map[string]interface{}{
+		handler.Render(w, "payment.html", map[string]interface{}{
 			"Title": "Payment Gateway",
 			"Total": total,
 			"User":  userID,
@@ -309,9 +238,9 @@ func handleCheckout(cfg Config) http.HandlerFunc {
 	}
 }
 
-func handlePaymentProcess(cfg Config) http.HandlerFunc {
+func handlePaymentProcess(cfg handler.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := getAuthenticatedUser(r)
+		userID := handler.GetAuthenticatedUser(r)
 		if userID == "" {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
@@ -330,7 +259,7 @@ func handlePaymentProcess(cfg Config) http.HandlerFunc {
 		rand.Seed(time.Now().UnixNano())
 		days := rand.Intn(5) + 3
 
-		render(w, "checkout.html", map[string]interface{}{
+		handler.Render(w, "checkout.html", map[string]interface{}{
 			"Title":        "Order Confirmed",
 			"DeliveryDays": days,
 			"User":         userID,
@@ -338,9 +267,9 @@ func handlePaymentProcess(cfg Config) http.HandlerFunc {
 	}
 }
 
-func handleAddToCart(cfg Config) http.HandlerFunc {
+func handleAddToCart(cfg handler.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := getAuthenticatedUser(r)
+		userID := handler.GetAuthenticatedUser(r)
 		if userID == "" {
 			// If not logged in, redirect to login page
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
@@ -377,7 +306,7 @@ func handleAddToCart(cfg Config) http.HandlerFunc {
 	}
 }
 
-func handleRemoveFromCart(cfg Config) http.HandlerFunc {
+func handleRemoveFromCart(cfg handler.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/cart", http.StatusSeeOther)
 	}
