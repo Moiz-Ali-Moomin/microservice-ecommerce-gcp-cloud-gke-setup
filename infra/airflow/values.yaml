@@ -18,6 +18,29 @@ dags:
     depth: 1
     # credentialsSecret: git-credentials # If needed
 
+# LOGS (Persistence)
+logs:
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClassName: standard-rwo
+
+# DATABASE (External Postgres assumed via Secrets or PGBouncer)
+data:
+  metadataSecretName: airflow-metadata-secret # User must create this
+
+# EXTERNAL DATABASE CONFIG (Disable Chart DB)
+postgresql:
+  enabled: false
+
+# RBAC & ACCOUNT
+rbac:
+  create: true
+
+serviceAccount:
+  create: true
+  name: "airflow-service-account"
+
 # PROBES (Webserver/Scheduler/Workers)
 scheduler:
   livenessProbe:
@@ -59,8 +82,4 @@ workers:
     limits:
       cpu: 1000m
       memory: 1Gi
-
-# DATABASE (External Postgres assumed via Secrets or PGBouncer)
-data:
-  metadataSecretName: airflow-metadata-secret # User must create this
 

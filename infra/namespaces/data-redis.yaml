@@ -1,0 +1,8 @@
+# infra/namespaces/data-redis.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: data-redis
+  labels:
+    istio-injection: disabled
+    name: data-redis

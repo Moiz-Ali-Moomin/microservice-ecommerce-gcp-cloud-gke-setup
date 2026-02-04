@@ -1,45 +1,48 @@
 # infra/sonarqube/values.yaml
 # Production-ready configuration for SonarQube on K8s
 
-# Using the official chart: sonarqube/sonarqube
-
-# Persistence for data
-# In GCP, use standard-rwo. Locally, it will use default local-path.
+# Persistence for data (ElasticSearch indices, plugins)
 persistence:
   enabled: true
   size: 5Gi
+  storageClass: "standard-rwo"
 
-# PostgreSQL Configuration (Bundled)
+# Disable Bundled Postgres (Use external production DB)
 postgresql:
-  enabled: true
-  persistence:
-    enabled: true
-    size: 5Gi
-  resources:
-    requests:
-      cpu: 250m
-      memory: 512Mi
-    limits:
-      cpu: 500m
-      memory: 1Gi
+  enabled: false
+
+# External Database Connection
+jdbcOverwrite:
+  enable: true
+  # Assumes 'sonarqube' database exists in the shared postgres instance
+  jdbcUrl: "jdbc:postgresql://postgres-primary.data-postgres.svc.cluster.local:5432/sonarqube"
+  jdbcUsername: "sonarqube"
+  # Password should be injected via Secret, but for values reference:
+  jdbcSecretName: "sonarqube-db-creds"
+  jdbcSecretPasswordKey: "password"
 
 # SonarQube Resources
 resources:
   requests:
-    cpu: 500m
-    memory: 2Gi
+    cpu: 1000m  # SonarQube is Java, needs explicit CPU
+    memory: 2Gi # Min heap
   limits:
-    cpu: 1000m
-    memory: 4Gi
+    cpu: 2000m
+    memory: 4Gi # Max heap
 
-# Readiness/Liveness Probes (Standard)
+# JVM Options to match resources
+jvmOpts: "-Xmx3072m -Xms2048m -XX:+UseG1GC"
+
+# Readiness/Liveness Probes
 readinessProbe:
   initialDelaySeconds: 60
   periodSeconds: 30
+  failureThreshold: 5
 livenessProbe:
   initialDelaySeconds: 120
   periodSeconds: 30
+  failureThreshold: 5
 
-# Monitoring (Optional but good)
+# Monitoring
 prometheusExporter:
   enabled: true

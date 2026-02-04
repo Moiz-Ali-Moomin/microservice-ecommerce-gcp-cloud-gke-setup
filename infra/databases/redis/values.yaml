@@ -1,18 +1,58 @@
 # infra/databases/redis/values.yaml
-# Production-ready Bitnami Redis HA
+# Production-ready values for bitnami/redis
+
+global:
+  storageClass: "standard-rwo"
+
 architecture: replication
+
 auth:
-  existingSecret: "redis-creds"
+  enabled: true
+  existingSecret: "redis-creds" # Must contain: redis-password
+
 master:
   persistence:
+    enabled: true
     size: 10Gi
   resources:
     requests:
       cpu: 250m
       memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  podSecurityContext:
+    enabled: true
+    fsGroup: 1001
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
 replica:
   replicaCount: 2
   persistence:
+    enabled: true
     size: 10Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+# Security
+networkPolicy:
+  enabled: true
+  allowExternal: false
+
+# Observability
 metrics:
   enabled: true
+  service:
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9121"

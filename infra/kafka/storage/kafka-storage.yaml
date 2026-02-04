@@ -1,0 +1,13 @@
+# infra/kafka/storage/kafka-storage.yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: kafka-fast-storage
+  labels:
+    app: kafka
+provisioner: pd.csi.storage.gke.io
+parameters:
+  type: pd-ssd  # Hardened to SSD for Production latency requirements
+  replication-type: none
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true

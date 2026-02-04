@@ -1,22 +1,15 @@
-apiVersion: networking.istio.io/v1alpha3
+apiVersion: networking.istio.io/v1
 kind: VirtualService
 metadata:
   name: sonarqube
   namespace: sonarqube
 spec:
   hosts:
-  - "*"
+  - "sonar.internal.example.com"
   gateways:
-  - ecommerce/ecom-gateway
+  - istio-system/ecom-gateway
   http:
-  - match:
-    - uri:
-        prefix: /sonar
-    - uri:
-        prefix: /static/sonar
-    rewrite:
-      uri: /
-    route:
+  - route:
     - destination:
         host: sonarqube-sonarqube.sonarqube.svc.cluster.local
         port:

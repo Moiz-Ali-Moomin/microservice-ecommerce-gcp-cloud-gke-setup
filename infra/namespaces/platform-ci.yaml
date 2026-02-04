@@ -1,0 +1,8 @@
+# infra/namespaces/platform-ci.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ci-cd
+  labels:
+    istio-injection: disabled
+    name: ci-cd

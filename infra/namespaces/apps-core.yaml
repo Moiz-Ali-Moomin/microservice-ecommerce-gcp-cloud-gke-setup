@@ -1,0 +1,8 @@
+# infra/namespaces/apps-core.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: apps-core
+  labels:
+    istio-injection: enabled
+    name: apps-core

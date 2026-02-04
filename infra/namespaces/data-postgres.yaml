@@ -1,0 +1,8 @@
+# infra/namespaces/data-postgres.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: data-postgres
+  labels:
+    istio-injection: disabled # DBs often better without sidecar interference
+    name: data-postgres

@@ -1,0 +1,15 @@
+# infra/kafka/operator/strimzi-install.yaml
+# Downloads and installs the Strimzi Operator (v0.40.0)
+# Command: kubectl create -f 'https://strimzi.io/install/latest?namespace=kafka' -n kafka
+
+apiVersion: subscription.operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: strimzi-kafka-operator
+  namespace: kafka
+spec:
+  channel: stable
+  name: strimzi-kafka-operator
+  source: operatorhubio-catalog
+  sourceNamespace: olm
+  installPlanApproval: Automatic

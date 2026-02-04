@@ -1,21 +1,60 @@
 # infra/databases/postgres/values.yaml
-# Production-ready Bitnami PostgreSQL HA
+# Production-ready values for bitnami/postgresql
+
+global:
+  storageClass: "standard-rwo"
+
 architecture: replication
+
 auth:
   username: "app_user"
   database: "ecommerce_db"
-  existingSecret: "postgres-creds" # Managed via SealedSecrets in real repo
+  existingSecret: "postgres-creds" # Must contain: postgres-password, password (for user), replication-password
+
 primary:
-  persistence:
-    size: 20Gi
-    storageClass: "standard-rwo"
   resources:
     requests:
       cpu: 500m
       memory: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  persistence:
+    enabled: true
+    size: 20Gi
+  podSecurityContext:
+    enabled: true
+    fsGroup: 1001
+  # Critical for HA
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
 readReplicas:
   replicaCount: 2
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
   persistence:
+    enabled: true
     size: 20Gi
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+# Security
+networkPolicy:
+  enabled: true
+  allowExternal: false
+
+# Observability
 metrics:
   enabled: true
+  service:
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "9187"

@@ -1,0 +1,9 @@
+# infra/namespaces/platform-istio.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: istio-system
+  labels:
+    istio-injection: disabled # Mesh control plane doesn't need sidecar
+    topology.istio.io/network: "default"
+    pod-security.kubernetes.io/enforce: privileged

@@ -1,0 +1,8 @@
+# infra/namespaces/platform-observability.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  labels:
+    istio-injection: enabled # Monitoring tools can be in the mesh for mTLS scraping
+    name: observability

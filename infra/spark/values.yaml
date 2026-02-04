@@ -8,6 +8,15 @@ image:
 webhook:
   enable: true
 
+# Operator Resources (Hardened)
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
 resourceQuota:
   enable: false
 
