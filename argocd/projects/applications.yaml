@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: applications
+  namespace: platform-argocd
+spec:
+  description: "Microservices"
+  sourceRepos:
+  - '*'
+  destinations:
+  - namespace: 'apps-*'
+    server: https://kubernetes.default.svc
+  # STRICT: Apps cannot touch cluster resources, only namespaced ones
+  clusterResourceWhitelist: [] 
+  namespaceResourceBlacklist:
+  - group: ''
+    kind: ResourceQuota
+  - group: ''
+    kind: LimitRange
+  - group: 'networking.k8s.io'
+    kind: NetworkPolicy

@@ -1,0 +1,17 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: tooling
+  namespace: platform-argocd
+spec:
+  description: "Ops Tooling (Airflow, Sonar, Spark)"
+  sourceRepos:
+  - '*'
+  destinations:
+  - namespace: 'sonarqube'
+    server: https://kubernetes.default.svc
+  - namespace: 'apps-async' # Spark/Airflow
+    server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+  - group: '*'
+    kind: '*' # Tooling often needs CRDs (Spark, etc)

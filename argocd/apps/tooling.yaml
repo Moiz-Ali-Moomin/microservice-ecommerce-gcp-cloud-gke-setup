@@ -1,0 +1,43 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tooling-sonarqube
+  namespace: platform-argocd
+spec:
+  project: tooling
+  source:
+    repoURL: https://github.com/your-org/ecommerce-platform.git
+    targetRevision: HEAD
+    path: infra/sonarqube
+    helm:
+      valueFiles:
+        - values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: sonarqube
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tooling-spark
+  namespace: platform-argocd
+spec:
+  project: tooling
+  source:
+    repoURL: https://github.com/your-org/ecommerce-platform.git
+    targetRevision: HEAD
+    path: infra/spark
+    helm:
+      valueFiles:
+        - values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps-async # Hardened location
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

@@ -1,0 +1,17 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: data
+  namespace: platform-argocd
+spec:
+  description: "Stateful Workloads (Kafka, DBs)"
+  sourceRepos:
+  - '*'
+  destinations:
+  - namespace: 'data-*'
+    server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+  - group: 'networking.k8s.io'
+    kind: 'NetworkPolicy'
+  - group: 'kafka.strimzi.io' # Allow managing Kafka CRDs
+    kind: '*'
