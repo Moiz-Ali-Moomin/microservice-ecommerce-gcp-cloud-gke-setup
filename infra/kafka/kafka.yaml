@@ -87,6 +87,9 @@ spec:
     metadata:
       labels:
         app: kafka
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9308" # Assuming JMX exporter or internal metrics
     spec:
       securityContext:
         fsGroup: 1001

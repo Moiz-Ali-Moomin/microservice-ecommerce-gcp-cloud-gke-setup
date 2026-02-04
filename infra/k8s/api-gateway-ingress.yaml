@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-gateway
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.class: "gce" # or "nginx" depending on controller
+    networking.gke.io/managed-certificates: "ecommerce-cert" # Placeholder for managed cert
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway
+            port:
+              number: 8080

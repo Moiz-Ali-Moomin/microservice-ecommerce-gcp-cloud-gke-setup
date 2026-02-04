@@ -1,10 +1,66 @@
-# infra/airflow/values.yaml
 # Airflow Helm Values
 executor: KubernetesExecutor
+
+# Images
+images:
+  airflow:
+    repository: apache/airflow
+    tag: 2.9.0
+    pullPolicy: IfNotPresent
+
+# GIT SYNC (DAGS)
 dags:
   gitSync:
     enabled: true
     repo: "https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup.git"
     branch: "main"
     subPath: "infra/airflow/dags"
+    depth: 1
+    # credentialsSecret: git-credentials # If needed
+
+# PROBES (Webserver/Scheduler/Workers)
+scheduler:
+  livenessProbe:
+    initialDelaySeconds: 15
+    periodSeconds: 30
+    failureThreshold: 5
+  readinessProbe:
+    initialDelaySeconds: 15
+    periodSeconds: 30
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+webserver:
+  livenessProbe:
+    initialDelaySeconds: 15
+    periodSeconds: 30
+    failureThreshold: 5
+  readinessProbe:
+    initialDelaySeconds: 15
+    periodSeconds: 30
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+workers:
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+# DATABASE (External Postgres assumed via Secrets or PGBouncer)
+data:
+  metadataSecretName: airflow-metadata-secret # User must create this
 

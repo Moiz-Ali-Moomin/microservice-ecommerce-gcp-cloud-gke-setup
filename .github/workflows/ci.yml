@@ -159,6 +159,10 @@ jobs:
         run: terraform init
         working-directory: ${{ env.TF_WORKING_DIR }}
 
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
       - name: Terraform Plan
         run: terraform plan
         working-directory: ${{ env.TF_WORKING_DIR }}

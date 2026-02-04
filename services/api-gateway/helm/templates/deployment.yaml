@@ -28,6 +28,15 @@ spec:
             - name: {{ $key }}
               value: {{ $value | quote }}
             {{- end }}
+            {{- if .Values.envSecrets }}
+            {{- range $key, $val := .Values.envSecrets }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $val.name }}
+                  key: {{ $val.key }}
+            {{- end }}
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /health
