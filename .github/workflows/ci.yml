@@ -254,7 +254,8 @@ jobs:
             if [ -f "$svc/Dockerfile" ]; then
               NAME=$(basename "$svc")
               IMAGE="$GAR_REGION/${{ secrets.GCP_PROJECT_ID }}/$ARTIFACT_REPO/$NAME:${{ github.sha }}"
-              docker build -t $IMAGE $svc
+              # Fix: Use root context (.) so Dockerfile can COPY sibling directories like shared-lib
+              docker build -t $IMAGE -f $svc/Dockerfile .
               docker push $IMAGE
             fi
           done

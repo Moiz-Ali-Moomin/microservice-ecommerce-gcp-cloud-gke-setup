@@ -46,7 +46,6 @@ crash.log
 
 # Local / generated data
 data/
-resources/
 
 # Metabase local state
 infra/metabase/

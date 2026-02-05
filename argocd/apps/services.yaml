@@ -1,0 +1,284 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-storefront-service
+  namespace: platform-argocd
+spec:
+  project: applications
+  source:
+    repoURL: https://github.com/your-org/ecommerce-platform.git
+    targetRevision: HEAD
+    path: services/storefront-service/helm
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps-public
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-admin-backoffice
+  namespace: platform-argocd
+spec:
+  project: applications
+  source:
+    repoURL: https://github.com/your-org/ecommerce-platform.git
+    targetRevision: HEAD
+    path: services/admin-backoffice-service/helm
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps-core
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-api-gateway
+  namespace: platform-argocd
+spec:
+  project: applications
+  source:
+    repoURL: https://github.com/your-org/ecommerce-platform.git
+    targetRevision: HEAD
+    path: services/api-gateway/helm
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps-public
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-auth-service
+  namespace: platform-argocd
+spec:
+  project: applications
+  source:
+    repoURL: https://github.com/your-org/ecommerce-platform.git
+    targetRevision: HEAD
+    path: services/auth-service/helm
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps-core
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-user-service
+  namespace: platform-argocd
+spec:
+  project: applications
+  source:
+    repoURL: https://github.com/your-org/ecommerce-platform.git
+    targetRevision: HEAD
+    path: services/user-service/helm
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps-core
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-offer-service
+  namespace: platform-argocd
+spec:
+  project: applications
+  source:
+    repoURL: https://github.com/your-org/ecommerce-platform.git
+    targetRevision: HEAD
+    path: services/offer-service/helm
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps-core
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-notification-service
+  namespace: platform-argocd
+spec:
+  project: applications
+  source:
+    repoURL: https://github.com/your-org/ecommerce-platform.git
+    targetRevision: HEAD
+    path: services/notification-service/helm
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps-async
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-analytics-ingest
+  namespace: platform-argocd
+spec:
+  project: applications
+  source:
+    repoURL: https://github.com/your-org/ecommerce-platform.git
+    targetRevision: HEAD
+    path: services/analytics-ingest-service/helm
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps-async
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-attribution-service
+  namespace: platform-argocd
+spec:
+  project: applications
+  source:
+    repoURL: https://github.com/your-org/ecommerce-platform.git
+    targetRevision: HEAD
+    path: services/attribution-service/helm
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps-async
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-audit-service
+  namespace: platform-argocd
+spec:
+  project: applications
+  source:
+    repoURL: https://github.com/your-org/ecommerce-platform.git
+    targetRevision: HEAD
+    path: services/audit-service/helm
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps-async
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-conversion-webhook
+  namespace: platform-argocd
+spec:
+  project: applications
+  source:
+    repoURL: https://github.com/your-org/ecommerce-platform.git
+    targetRevision: HEAD
+    path: services/conversion-webhook/helm
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps-public
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-feature-flag-service
+  namespace: platform-argocd
+spec:
+  project: applications
+  source:
+    repoURL: https://github.com/your-org/ecommerce-platform.git
+    targetRevision: HEAD
+    path: services/feature-flag-service/helm
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps-core
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-landing-service
+  namespace: platform-argocd
+spec:
+  project: applications
+  source:
+    repoURL: https://github.com/your-org/ecommerce-platform.git
+    targetRevision: HEAD
+    path: services/landing-service/helm
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps-public
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-redirect-service
+  namespace: platform-argocd
+spec:
+  project: applications
+  source:
+    repoURL: https://github.com/your-org/ecommerce-platform.git
+    targetRevision: HEAD
+    path: services/redirect-service/helm
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps-public
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-reporting-service
+  namespace: platform-argocd
+spec:
+  project: applications
+  source:
+    repoURL: https://github.com/your-org/ecommerce-platform.git
+    targetRevision: HEAD
+    path: services/reporting-service/helm
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps-core
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

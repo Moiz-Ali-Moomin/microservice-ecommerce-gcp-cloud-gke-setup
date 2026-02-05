@@ -13,6 +13,7 @@ use (
 	./services/landing-service
 	./services/notification-service
 	./services/offer-service
+	./services/product-service
 	./services/redirect-service
 	./services/reporting-service
 	./services/shared-lib

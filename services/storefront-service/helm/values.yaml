@@ -12,5 +12,29 @@ resources:
   limits:
     cpu: 500m
     memory: 256Mi
+
 autoscaling:
-  enabled: false
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 3000
+  initialDelaySeconds: 15
+  periodSeconds: 20
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 3000
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+env:
+  PRODUCT_SERVICE_URL: "http://product-service.apps-core.svc.cluster.local:8080"
+  CART_SERVICE_URL: "http://cart-service.apps-core.svc.cluster.local:8080"
+  OFFER_SERVICE_URL: "http://offer-service.apps-core.svc.cluster.local:8080"
+

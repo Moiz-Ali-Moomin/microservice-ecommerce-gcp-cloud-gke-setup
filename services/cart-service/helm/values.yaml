@@ -51,4 +51,4 @@ envSecrets:
     key: "postgres-dsn"
 
 env:
-  REDIS_ADDR: redis-master.default.svc.cluster.local:6379
+  REDIS_ADDR: redis-master.data-postgres.svc.cluster.local:6379
