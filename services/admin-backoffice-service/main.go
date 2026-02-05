@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/admin-backoffice-service/internal/metabase"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/logger"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/tracing"
 	"go.uber.org/zap"
@@ -29,6 +30,12 @@ func main() {
 	mux.HandleFunc("/admin/stats", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"result": "System Healthy", "revenue": "high"})
+	})
+
+	// Metabase Analytics
+	mux.HandleFunc("/api/analytics/token", metabase.GetAnalyticsTokenHandler)
+	mux.HandleFunc("/analytics", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "templates/analytics.html")
 	})
 
 	logger.Log.Info("Starting admin-backoffice-service on :8080")

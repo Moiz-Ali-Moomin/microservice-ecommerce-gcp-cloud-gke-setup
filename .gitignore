@@ -43,3 +43,15 @@ crash.log
 # Binary files
 # =========================
 *.exe
+
+# Local / generated data
+data/
+resources/
+
+# Metabase local state
+infra/metabase/
+
+# Local dev artifacts
+.env
+*.log
+

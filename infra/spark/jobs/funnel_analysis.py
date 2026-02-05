@@ -14,15 +14,16 @@ def main():
     db_user = os.environ.get("DB_USER")
     db_pass = os.environ.get("DB_PASSWORD")
     db_url = os.environ.get("DB_URL", "jdbc:postgresql://postgres-primary.data-postgres.svc.cluster.local:5432/ecommerce_db")
+    input_path = os.environ.get("EVENTS_INPUT_PATH", "gs://ecommerce-events-archive/raw/*/*/*/*.json")
 
     if not db_user or not db_pass:
         print("Error: DB credentials not found in environment variables.")
         sys.exit(1)
 
     try:
-        # 3. Read events from GCS
-        # Note: In production, you'd want to process a specific date partition passed via args
-        events_df = spark.read.json("gs://ecommerce-events-archive/raw/*/*/*/*.json")
+        # 3. Read events
+        print(f"Reading events from: {input_path}")
+        events_df = spark.read.json(input_path)
 
         # 4. Funnel Calculation
         funnel_stats = events_df.groupBy("campaign_id", "event_type") \

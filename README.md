@@ -5,7 +5,8 @@
 [![Istio](https://img.shields.io/badge/Service_Mesh-Istio-466BB0?style=for-the-badge&logo=istio)](https://istio.io/)
 [![Argo CD](https://img.shields.io/badge/GitOps-Argo_CD-EF7B4D?style=for-the-badge&logo=argo)](https://argo-cd.readthedocs.io/)
 [![Go](https://img.shields.io/badge/Backend-Go-00ADD8?style=for-the-badge&logo=go)](https://go.dev/)
-[![React](https://img.shields.io/badge/Frontend-React-61DAFB?style=for-the-badge&logo=react)](https://reactjs.org/)
+[![HTML5](https://img.shields.io/badge/Frontend-HTML5-E34F26?style=for-the-badge&logo=html5)](https://developer.mozilla.org/en-US/docs/Web/HTML)
+[![Metabase](https://img.shields.io/badge/Analytics-Metabase-509EE3?style=for-the-badge&logo=metabase)](https://www.metabase.com/)
 ![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub_Actions-2088FF?style=for-the-badge&logo=github-actions)
 
 > **Enterprise-Ready Microservices Architecture on Google Cloud Platform.**
@@ -26,7 +27,9 @@ This platform uses a modern, distributed architecture designed for high availabi
     *   **PostgreSQL:** HA Cluster (Bitnami)
     *   **Redis:** Caching Layer (Bitnami)
     *   **Kafka:** Event Streaming (Strimzi Operator + KRaft Mode)
-*   **Analytics:** Apache Spark (on K8s) & Airflow (Orchestration)
+*   **Analytics:**
+    *   **Processing:** Apache Spark (on K8s) & Airflow (Orchestration)
+    *   **Visualization:** Metabase (Self-hosted, Embedded via Signed JWT)
 *   **Observability:** Prometheus, Grafana, Jaeger, Kiali (OpenTelemetry compatible)
 
 ---
@@ -163,7 +166,7 @@ We use the **App of Apps** pattern to manage the entire cluster state from Git.
 
 ```bash
 ecommerce-platform/
-├── apps/               # Application configurations
+├── resources/          # Application configurations (Kafka Topics, etc.)
 │   └── kafka-topics/   # Declarative Kafka Topics
 ├── argocd/             # GitOps Configuration
 │   ├── bootstrap/      # Install manifests

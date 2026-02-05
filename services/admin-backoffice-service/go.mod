@@ -6,6 +6,7 @@ replace github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/se
 
 require (
 	github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib v0.0.0-00010101000000-000000000000
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	go.uber.org/zap v1.27.1
 )
 
