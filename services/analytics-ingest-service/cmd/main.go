@@ -31,7 +31,7 @@ func main() {
 	if err != nil {
 		logger.Log.Fatal("Failed to init tracer", zap.Error(err))
 	}
-	defer func() { _ = tp.Shutdown(nil) }()
+	defer func() { _ = tp.Shutdown(context.Background()) }()
 
 	brokers := strings.Split(os.Getenv("KAFKA_BROKERS"), ",")
 	if len(brokers) == 0 || brokers[0] == "" {
