@@ -216,7 +216,7 @@ services:
 
   airflow-init:
     image: ecommerce/airflow:custom
-    # Use standard entrypoint (wrapper) but invoke bash explicitly to chain commands
+    # Use standard entrypoint (wrapper) but invoke bash explicitly to chain commands to run it successfully
     command:
       - bash
       - -c
@@ -238,6 +238,7 @@ services:
           --email admin@example.com
 
         echo "Init completed successfully."
+
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
