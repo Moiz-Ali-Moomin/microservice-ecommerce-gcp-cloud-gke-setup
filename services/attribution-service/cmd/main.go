@@ -34,7 +34,14 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	h := handler.New()
+	// Producer for "campaign.attributed"
+	producer, err := event.NewProducer(brokers, "campaign.attributed")
+	if err != nil {
+		logger.Log.Error("Failed to create producer", zap.Error(err))
+	}
+	defer producer.Close()
+
+	h := handler.New(producer)
 
 	// Create consumer instance
 	consumer = event.NewConsumer(

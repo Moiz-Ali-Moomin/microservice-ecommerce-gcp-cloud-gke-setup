@@ -6,7 +6,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/event"
@@ -53,6 +56,9 @@ func main() {
 		}
 	}
 
+	// WaitGroup to track pending emissions
+	var wg sync.WaitGroup
+
 	http.HandleFunc("/ingest", func(w http.ResponseWriter, r *http.Request) {
 		var req IngestRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -74,8 +80,14 @@ func main() {
 			Metadata:  req.Payload,
 		}
 
+		wg.Add(1)
 		go func() {
-			if err := p.Emit(context.Background(), req.EventName, uuid.New().String(), evt); err != nil {
+			defer wg.Done()
+			// Use background context with timeout for detached execution
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			if err := p.Emit(ctx, req.EventName, uuid.New().String(), evt); err != nil {
 				logger.Log.Error("Ingest failed", zap.Error(err))
 			}
 		}()
@@ -83,8 +95,33 @@ func main() {
 		w.WriteHeader(http.StatusAccepted)
 	})
 
-	logger.Log.Info("Starting analytics-ingest-service on :8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		log.Fatalf("Server failed: %v", err)
+	// Graceful Shutdown Setup
+	server := &http.Server{
+		Addr:    ":8080",
+		Handler: nil,
 	}
+
+	go func() {
+		logger.Log.Info("Starting analytics-ingest-service on :8080")
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server failed: %v", err)
+		}
+	}()
+
+	// Wait for interrupt
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	logger.Log.Info("Shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		logger.Log.Error("Server forced to shutdown", zap.Error(err))
+	}
+
+	logger.Log.Info("Waiting for pending events...")
+	wg.Wait()
+	logger.Log.Info("Server exiting")
 }

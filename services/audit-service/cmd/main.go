@@ -35,7 +35,7 @@ func main() {
 	defer cancel()
 
 	// Audit all topics for compliance
-	topics := []string{"page.viewed", "cta.clicked", "checkout.redirected", "conversion.completed", "campaign.attributed", "user.signup", "checkout.completed"}
+	topics := []string{"page.viewed", "cta.clicked", "checkout.redirected", "conversion.completed", "campaign.attributed", "user.signup", "checkout.completed", "user.login", "cart.updated"}
 
 	consumer = event.NewConsumer(
 		brokers,

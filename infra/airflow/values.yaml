@@ -2,11 +2,12 @@
 executor: KubernetesExecutor
 
 # Images
+# Images
 images:
   airflow:
-    repository: apache/airflow
-    tag: 2.9.0
-    pullPolicy: IfNotPresent
+    repository: us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo/airflow
+    tag: custom
+    pullPolicy: Always
 
 # GIT SYNC (DAGS)
 dags:

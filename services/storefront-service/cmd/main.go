@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,7 +10,9 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/event"
@@ -59,9 +62,38 @@ func main() {
 	http.HandleFunc("/checkout", handleCheckout(config))
 	http.HandleFunc("/payment/process", handlePaymentProcess(config))
 
-	log.Printf("Storefront-Service (GO commerce) running on port %s", config.Port)
-	log.Printf("Connected to Gateway at %s", config.GatewayURL)
-	log.Fatal(http.ListenAndServe(":"+config.Port, nil))
+	// Graceful Shutdown
+	server := &http.Server{
+		Addr:    ":" + config.Port,
+		Handler: nil, // DefaultServeMux
+	}
+
+	go func() {
+		log.Printf("Storefront-Service running on port %s", config.Port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server startup failed: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutting down server...")
+
+	// Context for shutdown period
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Trigger Graceful Shutdown
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	// Flush Analytics Events
+	analyticsService.Close()
+
+	log.Println("Server exiting")
 }
 
 func handleLogin(cfg handler.Config) http.HandlerFunc {

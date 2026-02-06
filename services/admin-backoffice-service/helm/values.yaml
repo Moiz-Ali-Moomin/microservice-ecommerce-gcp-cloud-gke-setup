@@ -5,6 +5,9 @@ image:
 service:
   type: ClusterIP
   port: 8080
+env:
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.platform-observability.svc.cluster.local:4317
+  OTEL_SERVICE_NAME: admin-backoffice-service
 resources:
   requests:
     cpu: 100m

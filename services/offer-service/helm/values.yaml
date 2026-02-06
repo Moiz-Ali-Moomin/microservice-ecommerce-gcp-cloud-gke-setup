@@ -5,6 +5,10 @@ image:
 service:
   type: ClusterIP
   port: 8080
+env:
+  KAFKA_BROKERS: "kafka-bootstrap.kafka.svc.cluster.local:9092"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.platform-observability.svc.cluster.local:4317
+  OTEL_SERVICE_NAME: offer-service
 resources:
   requests:
     cpu: 100m

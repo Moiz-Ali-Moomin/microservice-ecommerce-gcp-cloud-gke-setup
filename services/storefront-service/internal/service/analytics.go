@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+
+	"sync"
 	"time"
 
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/event"
@@ -11,6 +13,7 @@ import (
 
 type AnalyticsService struct {
 	producer *event.Producer
+	wg       sync.WaitGroup
 }
 
 func NewAnalyticsService(producer *event.Producer) *AnalyticsService {
@@ -18,6 +21,10 @@ func NewAnalyticsService(producer *event.Producer) *AnalyticsService {
 }
 
 func (s *AnalyticsService) TrackPageView(path, userAgent string) {
+	if s.producer == nil {
+		return
+	}
+
 	payload := map[string]interface{}{
 		"event":      "page.viewed",
 		"path":       path,
@@ -25,11 +32,10 @@ func (s *AnalyticsService) TrackPageView(path, userAgent string) {
 		"source":     "storefront",
 	}
 
+	s.wg.Add(1)
 	go func() {
-		if s.producer == nil {
-			// If producer failed to init, just return
-			return
-		}
+		defer s.wg.Done()
+
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
@@ -41,4 +47,11 @@ func (s *AnalyticsService) TrackPageView(path, userAgent string) {
 			)
 		}
 	}()
+}
+
+func (s *AnalyticsService) Close() {
+	// Wait for all pending events to finish
+	logger.Log.Info("Flushing analytics events...")
+	s.wg.Wait()
+	logger.Log.Info("Analytics events flushed.")
 }

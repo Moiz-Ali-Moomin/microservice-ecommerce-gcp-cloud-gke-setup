@@ -282,3 +282,41 @@ spec:
     automated:
       prune: true
       selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-cart-service
+  namespace: platform-argocd
+spec:
+  project: applications
+  source:
+    repoURL: https://github.com/your-org/ecommerce-platform.git
+    targetRevision: HEAD
+    path: services/cart-service/helm
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps-core
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-product-service
+  namespace: platform-argocd
+spec:
+  project: applications
+  source:
+    repoURL: https://github.com/your-org/ecommerce-platform.git
+    targetRevision: HEAD
+    path: services/product-service/helm
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: apps-core
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

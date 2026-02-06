@@ -30,14 +30,14 @@ podDisruptionBudget:
 # Environment variables
 env:
   KAFKA_BROKERS: kafka-bootstrap.kafka.svc.cluster.local:9092
-  AUTH_SERVICE_URL: http://auth-service:8080
-  USER_SERVICE_URL: http://user-service:8080
-  OFFER_SERVICE_URL: http://offer-service:8080
-  CART_SERVICE_URL: http://cart-service:8080
-  STOREFRONT_SERVICE_URL: http://storefront-service:8080
+  AUTH_SERVICE_URL: http://auth-service.apps-core.svc.cluster.local:8080
+  USER_SERVICE_URL: http://user-service.apps-core.svc.cluster.local:8080
+  OFFER_SERVICE_URL: http://offer-service.apps-core.svc.cluster.local:8080
+  CART_SERVICE_URL: http://cart-service.apps-core.svc.cluster.local:8080
+  STOREFRONT_SERVICE_URL: http://storefront-service.apps-public.svc.cluster.local:8080
   REDIS_ADDR: redis-master.default.svc.cluster.local:6379
   # OTEL config should be here too
-  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.platform-observability.svc.cluster.local:4317
   OTEL_SERVICE_NAME: api-gateway
 
 # Secrets config (to be used by updated deployment.yaml)

@@ -210,7 +210,10 @@ services:
     restart: unless-stopped
 
   airflow-init:
-    image: apache/airflow:2.9.0
+    build:
+      context: ./infra/airflow
+      dockerfile: Dockerfile
+    image: ecommerce/airflow:custom
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
@@ -226,7 +229,7 @@ services:
     command: version
 
   airflow-webserver:
-    image: apache/airflow:2.9.0
+    image: ecommerce/airflow:custom
     command: airflow webserver
     environment:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
@@ -248,7 +251,7 @@ services:
     restart: unless-stopped
 
   airflow-scheduler:
-    image: apache/airflow:2.9.0
+    image: ecommerce/airflow:custom
     command: airflow scheduler
     environment:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow

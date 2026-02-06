@@ -52,3 +52,4 @@ envSecrets:
 
 env:
   REDIS_ADDR: redis-master.data-postgres.svc.cluster.local:6379
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.platform-observability.svc.cluster.local:4317
