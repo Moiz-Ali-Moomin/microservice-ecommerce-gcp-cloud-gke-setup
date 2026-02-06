@@ -216,15 +216,28 @@ services:
 
   airflow-init:
     image: ecommerce/airflow:custom
-    command: >
-      bash -c " airflow db migrate && airflow users create
-        --username admin
-        --password admin
-        --firstname Admin
-        --lastname User
-        --role Admin
-        --email admin@example.com
-      "
+    # Use standard entrypoint (wrapper) but invoke bash explicitly to chain commands
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        echo "Running Airflow DB Migrate..."
+        airflow db migrate
+
+        echo "Creating Admin User..."
+        # Idempotency: Create user only if it doesn't already exist to avoid Exit 1
+        # 'airflow users create' fails if user exists. We satisfy the "admin" user requirement safely.
+        airflow users list | grep -q "admin" || \
+        airflow users create \
+          --username admin \
+          --password admin \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@example.com
+
+        echo "Init completed successfully."
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
