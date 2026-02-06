@@ -215,28 +215,24 @@ services:
     restart: unless-stopped
 
   airflow-init:
-    build:
-      context: ./infra/airflow
-      dockerfile: Dockerfile
     image: ecommerce/airflow:custom
     environment:
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
-      - AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
-      - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - AIRFLOW_UID=50000
-      - _AIRFLOW_DB_UPGRADE=true
-      - _AIRFLOW_WWW_USER_CREATE=true
-      - _AIRFLOW_WWW_USER_USERNAME=admin
-      - _AIRFLOW_WWW_USER_PASSWORD=admin
-      - AIRFLOW_CONN_SPARK_MASTER_CONN=http://spark-master:6066
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
+      AIRFLOW__CORE__FERNET_KEY: 46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW_UID: 50000
+      _AIRFLOW_DB_UPGRADE: "true"
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: admin
+      AIRFLOW_CONN_SPARK_MASTER_CONN: http://spark-master:6066
     depends_on:
       airflow-postgres:
         condition: service_healthy
-    networks: [ ecommerce-net ]
     volumes:
       - ./infra/airflow/dags:/opt/airflow/dags
-    command: version
+    networks: [ ecommerce-net ]
 
   airflow-webserver:
     image: ecommerce/airflow:custom
