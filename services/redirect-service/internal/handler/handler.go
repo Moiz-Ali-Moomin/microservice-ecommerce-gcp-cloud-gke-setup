@@ -57,7 +57,7 @@ func (h *Handler) HandleClick(w http.ResponseWriter, r *http.Request) {
 			// but outlives the request. For now, we use r.Context() assuming synchronous-ish emit
 			// or understanding that if request gets cancelled, this might too.
 			// Ideally: ctx := trace.ContextWithSpan(context.Background(), trace.SpanFromContext(r.Context()))
-			if err := h.clickProducer.Emit(ctx, offerID, clickEvt); err != nil {
+			if err := h.clickProducer.Emit(ctx, event.TypeCTAClicked, offerID, clickEvt); err != nil {
 				logger.Log.Error("Failed to emit click", zap.Error(err))
 			}
 		}()
@@ -78,7 +78,7 @@ func (h *Handler) HandleClick(w http.ResponseWriter, r *http.Request) {
 
 	if h.redirectProducer != nil {
 		go func() {
-			if err := h.redirectProducer.Emit(ctx, offerID, redirectEvt); err != nil {
+			if err := h.redirectProducer.Emit(ctx, "redirect.completed", offerID, redirectEvt); err != nil {
 				logger.Log.Error("Failed to emit redirect", zap.Error(err))
 			}
 		}()

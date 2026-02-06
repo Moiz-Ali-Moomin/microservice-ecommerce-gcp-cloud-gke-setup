@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/event"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/logger"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/tracing"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -75,7 +75,7 @@ func main() {
 		}
 
 		go func() {
-			if err := p.Emit(context.Background(), uuid.New().String(), evt); err != nil {
+			if err := p.Emit(context.Background(), req.EventName, uuid.New().String(), evt); err != nil {
 				logger.Log.Error("Ingest failed", zap.Error(err))
 			}
 		}()
@@ -88,4 +88,3 @@ func main() {
 		log.Fatalf("Server failed: %v", err)
 	}
 }
-

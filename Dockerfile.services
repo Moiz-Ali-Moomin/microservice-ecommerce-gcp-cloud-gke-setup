@@ -37,8 +37,9 @@ COPY services/notification-service/go.mod services/notification-service/go.su[m]
 COPY services/offer-service/go.mod services/offer-service/go.su[m] ./services/offer-service/
 COPY services/redirect-service/go.mod services/redirect-service/go.su[m] ./services/redirect-service/
 COPY services/reporting-service/go.mod services/reporting-service/go.su[m] ./services/reporting-service/
-COPY services/storefront-service/go.mod services/storefront-service/go.su[m] ./services/storefront-service/
-COPY services/user-service/go.mod services/user-service/go.su[m] ./services/user-service/
+COPY services/storefront-service/go.mod services/storefront-service/go.sum ./services/storefront-service/
+COPY services/user-service/go.mod services/user-service/go.sum ./services/user-service/
+COPY services/product-service/go.mod services/product-service/go.sum ./services/product-service/
 
 # 2. Download ALL dependencies in one cached layer
 RUN --mount=type=cache,target=/go/pkg/mod \
@@ -58,7 +59,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     cd /app/services/redirect-service && go mod download && \
     cd /app/services/reporting-service && go mod download && \
     cd /app/services/storefront-service && go mod download && \
-    cd /app/services/user-service && go mod download
+    cd /app/services/user-service && go mod download && \
+    cd /app/services/product-service && go mod download
 
 # ============================================================================
 # BUILDER - Compile all binaries
@@ -76,25 +78,27 @@ RUN mkdir -p /binaries
 ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
 
 # Build all services (parallel where possible, with wait to ensure completion)
+# Build all services with fail-fast parallel execution
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    cd /app/services/admin-backoffice-service && go build -ldflags="-w -s" -o /binaries/admin-backoffice-service ./main.go & \
-    cd /app/services/analytics-ingest-service && go build -ldflags="-w -s" -o /binaries/analytics-ingest-service ./cmd/main.go & \
-    cd /app/services/api-gateway && go build -ldflags="-w -s" -o /binaries/api-gateway ./cmd/main.go & \
-    cd /app/services/attribution-service && go build -ldflags="-w -s" -o /binaries/attribution-service ./cmd/main.go & \
-    cd /app/services/audit-service && go build -ldflags="-w -s" -o /binaries/audit-service ./cmd/main.go & \
-    cd /app/services/auth-service && go build -ldflags="-w -s" -o /binaries/auth-service ./cmd/main.go & \
-    cd /app/services/cart-service && go build -ldflags="-w -s" -o /binaries/cart-service ./cmd/main.go & \
-    cd /app/services/conversion-webhook && go build -ldflags="-w -s" -o /binaries/conversion-webhook ./cmd/main.go & \
-    cd /app/services/feature-flag-service && go build -ldflags="-w -s" -o /binaries/feature-flag-service ./cmd/main.go & \
-    cd /app/services/landing-service && go build -ldflags="-w -s" -o /binaries/landing-service ./cmd/main.go & \
-    cd /app/services/notification-service && go build -ldflags="-w -s" -o /binaries/notification-service ./cmd/main.go & \
-    cd /app/services/offer-service && go build -ldflags="-w -s" -o /binaries/offer-service ./cmd/main.go & \
-    cd /app/services/redirect-service && go build -ldflags="-w -s" -o /binaries/redirect-service ./cmd/main.go & \
-    cd /app/services/reporting-service && go build -ldflags="-w -s" -o /binaries/reporting-service ./cmd/main.go & \
-    cd /app/services/storefront-service && go build -ldflags="-w -s" -o /binaries/storefront-service ./cmd/main.go & \
-    cd /app/services/user-service && go build -ldflags="-w -s" -o /binaries/user-service ./cmd/main.go & \
-    wait
+    set -e; \
+    pids=""; \
+    # List of services to build
+    services="admin-backoffice-service analytics-ingest-service api-gateway attribution-service audit-service auth-service cart-service conversion-webhook feature-flag-service landing-service notification-service offer-service product-service redirect-service reporting-service storefront-service user-service"; \
+    for svc in $services; do \
+    echo "Starting build for $svc..."; \
+    ( \
+    cd /app/services/$svc; \
+    if [ -f "./cmd/main.go" ]; then target="./cmd/main.go"; else target="./main.go"; fi; \
+    go build -ldflags="-w -s" -o /binaries/$svc $target || { echo "❌ Build failed for $svc"; exit 1; } \
+    ) & \
+    pids="$pids $!"; \
+    done; \
+    # Wait for all builds and check exit codes
+    for pid in $pids; do \
+    wait $pid || { echo "❌ A background build failed"; exit 1; }; \
+    done; \
+    echo "✅ All services built successfully"
 
 # ============================================================================
 # RUNTIME STAGES - Minimal distroless images per service
@@ -211,6 +215,13 @@ ENTRYPOINT ["/app/server"]
 FROM gcr.io/distroless/static-debian12:nonroot AS user-service
 WORKDIR /app
 COPY --from=builder /binaries/user-service /app/server
+USER nonroot
+EXPOSE 8080
+ENTRYPOINT ["/app/server"]
+
+FROM gcr.io/distroless/static-debian12:nonroot AS product-service
+WORKDIR /app
+COPY --from=builder /binaries/product-service /app/server
 USER nonroot
 EXPOSE 8080
 ENTRYPOINT ["/app/server"]

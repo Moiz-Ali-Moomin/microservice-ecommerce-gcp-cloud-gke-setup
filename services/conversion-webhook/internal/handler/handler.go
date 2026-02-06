@@ -71,7 +71,7 @@ func (h *Handler) HandleClickBankParam(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.producer != nil {
-		if err := h.producer.Emit(context.Background(), sessionID, evt); err != nil {
+		if err := h.producer.Emit(context.Background(), event.TypeConversion, sessionID, evt); err != nil {
 			logger.Log.Error("Failed to emit conversion", zap.Error(err))
 			http.Error(w, "Internal Error", http.StatusInternalServerError)
 			return

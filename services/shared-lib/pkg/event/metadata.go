@@ -12,3 +12,13 @@ type Metadata struct {
 	Timestamp     time.Time `json:"timestamp"`
 	Version       string    `json:"version"` // Schema version
 }
+
+// Event represents a generic event wrapper
+type Event struct {
+	EventID   string                 `json:"event_id"`
+	Timestamp time.Time              `json:"timestamp"`
+	Service   string                 `json:"service"`
+	Metadata  map[string]interface{} `json:"metadata"`
+	SessionID string                 `json:"session_id,omitempty"`
+	OfferID   string                 `json:"offer_id,omitempty"`
+}

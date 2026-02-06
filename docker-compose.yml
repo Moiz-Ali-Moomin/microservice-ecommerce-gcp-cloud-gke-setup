@@ -34,12 +34,12 @@ services:
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: ecommerce
+      POSTGRES_DB: ecommerce_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks: [ ecommerce-net ]
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U user -d ecommerce" ]
+      test: [ "CMD-SHELL", "pg_isready -U user -d ecommerce_db" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -296,6 +296,27 @@ services:
     restart: unless-stopped
 
   # ===============================================================
+  # ANALYTICS UI (METABASE)
+  # ===============================================================
+  metabase:
+    image: metabase/metabase:v0.48.4
+    container_name: metabase
+    ports:
+      - "3001:3000" # Mapped to 3001 to avoid conflict with Grafana
+    environment:
+      - MB_DB_TYPE=postgres
+      - MB_DB_DBNAME=metabase
+      - MB_DB_PORT=5432
+      - MB_DB_USER=metabase
+      - MB_DB_PASS=metabase
+      - MB_DB_HOST=postgres
+    volumes:
+      - ./data/metabase-data:/metabase-data # Persist H2 DB if default
+    networks: [ ecommerce-net ]
+    depends_on: [ postgres ]
+    restart: unless-stopped
+
+  # ===============================================================
   # MICROSERVICES
   # ===============================================================
   # Mapped ports: 8080 (Gateway) then 8081-8096 (Services)
@@ -313,7 +334,7 @@ services:
       - OFFER_SERVICE_URL=http://offer-service:8080
       - CART_SERVICE_URL=http://cart-service:8080
       - STOREFRONT_SERVICE_URL=http://storefront-service:8080
-      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce_db?sslmode=disable
       - REDIS_ADDR=redis:6379
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_SERVICE_NAME=api-gateway
@@ -330,7 +351,7 @@ services:
     ports: [ "8081:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce_db?sslmode=disable
       - REDIS_ADDR=redis:6379
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_SERVICE_NAME=auth-service
@@ -347,7 +368,7 @@ services:
     ports: [ "8082:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce_db?sslmode=disable
       - REDIS_ADDR=redis:6379
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_SERVICE_NAME=user-service
@@ -364,7 +385,7 @@ services:
     ports: [ "8083:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce_db?sslmode=disable
       - REDIS_ADDR=redis:6379
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_SERVICE_NAME=admin-backoffice-service
@@ -381,7 +402,7 @@ services:
     ports: [ "8084:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce_db?sslmode=disable
       - REDIS_ADDR=redis:6379
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_SERVICE_NAME=analytics-ingest-service
@@ -398,7 +419,7 @@ services:
     ports: [ "8085:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce_db?sslmode=disable
       - REDIS_ADDR=redis:6379
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_SERVICE_NAME=attribution-service
@@ -415,7 +436,7 @@ services:
     ports: [ "8086:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce_db?sslmode=disable
       - REDIS_ADDR=redis:6379
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_SERVICE_NAME=audit-service
@@ -432,7 +453,7 @@ services:
     ports: [ "8087:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce_db?sslmode=disable
       - REDIS_ADDR=redis:6379
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_SERVICE_NAME=cart-service
@@ -449,7 +470,7 @@ services:
     ports: [ "8088:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce_db?sslmode=disable
       - REDIS_ADDR=redis:6379
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_SERVICE_NAME=conversion-webhook
@@ -466,7 +487,7 @@ services:
     ports: [ "8089:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce_db?sslmode=disable
       - REDIS_ADDR=redis:6379
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_SERVICE_NAME=feature-flag-service
@@ -483,7 +504,7 @@ services:
     ports: [ "8090:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce_db?sslmode=disable
       - REDIS_ADDR=redis:6379
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_SERVICE_NAME=landing-service
@@ -500,7 +521,7 @@ services:
     ports: [ "8091:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce_db?sslmode=disable
       - REDIS_ADDR=redis:6379
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_SERVICE_NAME=notification-service
@@ -517,7 +538,7 @@ services:
     ports: [ "8092:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce_db?sslmode=disable
       - REDIS_ADDR=redis:6379
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_SERVICE_NAME=offer-service
@@ -534,7 +555,7 @@ services:
     ports: [ "8093:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce_db?sslmode=disable
       - REDIS_ADDR=redis:6379
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_SERVICE_NAME=redirect-service
@@ -551,10 +572,27 @@ services:
     ports: [ "8094:8080" ]
     environment:
       - KAFKA_BROKERS=kafka:9092
-      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce_db?sslmode=disable
       - REDIS_ADDR=redis:6379
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_SERVICE_NAME=reporting-service
+    depends_on:
+      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [ ecommerce-net ]
+    restart: unless-stopped
+
+  product-service:
+    build: { context: ., dockerfile: Dockerfile.services, target: product-service }
+    image: ecommerce/product-service:local
+    ports: [ "8096:8080" ]
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce_db?sslmode=disable
+      - REDIS_ADDR=redis:6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=product-service
     depends_on:
       kafka: { condition: service_healthy }
       postgres: { condition: service_healthy }
@@ -569,7 +607,7 @@ services:
     environment:
       - PORT=8080
       - KAFKA_BROKERS=kafka:9092
-      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce?sslmode=disable
+      - POSTGRES_DSN=postgres://user:password@postgres:5432/ecommerce_db?sslmode=disable
       - REDIS_ADDR=redis:6379
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_SERVICE_NAME=storefront-service

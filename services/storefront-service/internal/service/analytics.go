@@ -33,7 +33,8 @@ func (s *AnalyticsService) TrackPageView(path, userAgent string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		if err := s.producer.Emit(ctx, path, payload); err != nil {
+		// Use path as partitioning key for now
+		if err := s.producer.Emit(ctx, "page.viewed", path, payload); err != nil {
 			logger.Log.Error("Failed to publish page.viewed event",
 				zap.Error(err),
 				zap.String("path", path),

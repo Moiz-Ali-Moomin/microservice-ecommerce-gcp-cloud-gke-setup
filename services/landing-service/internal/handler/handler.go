@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/event"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/logger"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -29,7 +29,7 @@ func (h *Handler) ServeLandingPage(w http.ResponseWriter, r *http.Request) {
 
 	// Emit Page View Event
 	sessionID := uuid.New().String() // In reality, check cookie/header first
-	
+
 	evt := event.Event{
 		EventID:   uuid.New().String(),
 		Timestamp: time.Now(),
@@ -44,7 +44,7 @@ func (h *Handler) ServeLandingPage(w http.ResponseWriter, r *http.Request) {
 
 	if h.producer != nil {
 		go func() {
-			if err := h.producer.Emit(context.Background(), sessionID, evt); err != nil {
+			if err := h.producer.Emit(context.Background(), event.TypePageViewed, sessionID, evt); err != nil {
 				logger.Log.Error("Failed to emit view", zap.Error(err))
 			}
 		}()
@@ -63,4 +63,3 @@ func (h *Handler) ServeLandingPage(w http.ResponseWriter, r *http.Request) {
 		</html>
 	`, offerID, offerID, sessionID)
 }
-

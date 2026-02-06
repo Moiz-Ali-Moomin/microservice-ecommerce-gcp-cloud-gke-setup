@@ -3,8 +3,11 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
+	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/event"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/logger"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
@@ -19,12 +22,14 @@ type Cart struct {
 }
 
 type Handler struct {
-	carts map[string]*Cart
+	carts    map[string]*Cart
+	producer *event.Producer
 }
 
-func New() *Handler {
+func New(p *event.Producer) *Handler {
 	return &Handler{
-		carts: make(map[string]*Cart),
+		carts:    make(map[string]*Cart),
+		producer: p,
 	}
 }
 
@@ -68,6 +73,26 @@ func (h *Handler) HandleCart(w http.ResponseWriter, r *http.Request) {
 		}
 
 		logger.Log.Info("Added to cart", zap.String("user_id", userID), zap.String("offer_id", item.OfferID))
+
+		// Emit Event
+		evt := event.Event{
+			EventID:   uuid.New().String(),
+			Timestamp: time.Now(),
+			Service:   "cart-service",
+			SessionID: userID, // Assuming UserID acts as session for cart
+			Metadata: map[string]interface{}{
+				"action":   "add_item",
+				"offer_id": item.OfferID,
+				"quantity": item.Quantity,
+			},
+		}
+		// Fire and forget (or log error)
+		if h.producer != nil {
+			if err := h.producer.Emit(r.Context(), "cart.updated", userID, evt); err != nil {
+				logger.Log.Error("Failed to emit cart event", zap.Error(err))
+			}
+		}
+
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -79,4 +104,3 @@ func (h *Handler) HandleCart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
-
