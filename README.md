@@ -1,66 +1,191 @@
 # 🛒 Cloud-Native E-Commerce Platform
 
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-GKE-326CE5?style=for-the-badge&logo=kubernetes)](https://cloud.google.com/kubernetes-engine)
-[![Terraform](https://img.shields.io/badge/Infrastructure-Terraform-7B42BC?style=for-the-badge&logo=terraform)](https://www.terraform.io/)
-[![Istio](https://img.shields.io/badge/Service_Mesh-Istio-466BB0?style=for-the-badge&logo=istio)](https://istio.io/)
-[![Argo CD](https://img.shields.io/badge/GitOps-Argo_CD-EF7B4D?style=for-the-badge&logo=argo)](https://argo-cd.readthedocs.io/)
-[![Go](https://img.shields.io/badge/Backend-Go-00ADD8?style=for-the-badge&logo=go)](https://go.dev/)
-[![HTML5](https://img.shields.io/badge/Frontend-HTML5-E34F26?style=for-the-badge&logo=html5)](https://developer.mozilla.org/en-US/docs/Web/HTML)
-[![Metabase](https://img.shields.io/badge/Analytics-Metabase-509EE3?style=for-the-badge&logo=metabase)](https://www.metabase.com/)
-![CI/CD](https://img.shields.io/badge/CI%2FCD-GitHub_Actions-2088FF?style=for-the-badge&logo=github-actions)
+![Build Status](https://img.shields.io/github/actions/workflow/status/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/ci.yml?style=for-the-badge&logo=github)
+![Go Version](https://img.shields.io/github/go-mod/go-version/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup?style=for-the-badge&logo=go)
+![License](https://img.shields.io/github/license/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup?style=for-the-badge)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-GKE-326CE5?style=for-the-badge&logo=kubernetes)
+![Terraform](https://img.shields.io/badge/Infrastructure-Terraform-7B42BC?style=for-the-badge&logo=terraform)
+![Istio](https://img.shields.io/badge/Service_Mesh-Istio-466BB0?style=for-the-badge&logo=istio)
+![Argo CD](https://img.shields.io/badge/GitOps-Argo_CD-EF7B4D?style=for-the-badge&logo=argo)
 
-> **Enterprise-ready microservices architecture on Google Cloud Platform.**  
-> Hardened for production resiliency, security, and scalability.
-
----
-
-## 🏗️ Architecture Overview
-
-This platform uses a modern, distributed architecture designed for **high availability**, **observability**, and **secure-by-default operations**.
-
-### Core Stack
-
-- **Compute:** Google Kubernetes Engine (GKE – Autopilot / Standard)
-- **Infrastructure:** Terraform (Modular, Validated)
-- **Networking:** Istio Service Mesh (mTLS, Gateway API, VirtualServices)
-- **Delivery:** Argo CD (GitOps Controller)
-- **Data Layer:**
-  - PostgreSQL (HA – Bitnami)
-  - Redis (Caching – Bitnami)
-  - Kafka (Strimzi Operator + KRaft mode)
-- **Analytics:**
-  - Processing: Apache Spark (K8s) + Airflow
-  - Visualization: Metabase (Embedded via signed JWT)
-- **Observability:** Prometheus, Grafana, Jaeger, Kiali (OpenTelemetry compatible)
+> **Enterprise-grade, distributed e-commerce platform built for scale.**
+> Designed with a focus on **high availability**, **observability**, and **GitOps principles**. Fully deployable on Google Kubernetes Engine (GKE) or locally via Docker Compose.
 
 ---
 
-## 🚀 Getting Started Guide
+## 🏗️ Architecture
 
-### Prerequisites
+This system mirrors a real-world production environment, leveraging a microservices architecture orchestrated by Kubernetes and managed via GitOps.
 
-Make sure the following tools are installed locally:
+```mermaid
+graph TD
+    User((User)) -->|HTTPS| G[Istio Ingress Gateway]
+    
+    subgraph "Service Mesh (Istio)"
+        G -->|/api| API[API Gateway]
+        G -->|/| Web[Storefront Service]
+        
+        API --> Auth[Auth Service]
+        API --> Product[Product Service]
+        API --> Cart[Cart Service]
+        API --> UserSvc[User Service]
+        API --> Offer[Offer Service]
+        
+        Web --> API
+        
+        Cart --> Redis[(Redis Cache)]
+        Product --> DB[(PostgreSQL)]
+        UserSvc --> DB
+        
+        API -.->|Async Events| Kafka{Kafka Cluster}
+        
+        Kafka --> Analytics[Analytics Service]
+        Kafka --> Notif[Notification Service]
+        Kafka --> Audit[Audit Service]
+    end
+    
+    subgraph "Observability & Ops"
+        Prom[Prometheus]
+        Graf[Grafana]
+        Jaeg[Jaeger]
+        Argo[Argo CD]
+    end
+```
 
-- [Go 1.24+](https://go.dev/dl/)
-- [Docker](https://www.docker.com/)
-- [Terraform 1.6+](https://developer.hashicorp.com/terraform/install)
-- [Google Cloud SDK](https://cloud.google.com/sdk/docs/install)
-- [kubectl](https://kubernetes.io/docs/tasks/tools/)
-- [Helm](https://helm.sh/docs/intro/install/)
+### 🌟 Key Features
+
+-   **Cloud-Native**: Native integration with GKE, Cloud SQL, and Google Secret Manager.
+-   **Service Mesh**: Istio for mTLS, traffic splitting, and observability.
+-   **GitOps**: Argo CD for declarative continuous delivery.
+-   **Event-Driven**: Kafka (KRaft mode) for asynchronous communication and analytics.
+-   **Observability**: Full OpenTelemetry stack (Prometheus, Grafana, Jaeger, Loki, Tempo).
+-   **Security**: OIDC Authentication, RBAC, and Network Policies.
 
 ---
 
-## Phase 1: Google Cloud & GitHub Setup
+## 🧩 Microservices
 
-### Google Cloud Setup
+| Service                  | Description                                      | Tech Stack |
+| ------------------------ | ------------------------------------------------ | ---------- |
+| **api-gateway**          | Unified entry point, routing, and aggregation.   | Go, Fiber  |
+| **auth-service**         | User authentication & JWT token generation.      | Go, OAuth2 |
+| **product-service**      | Catalog management and inventory tracking.       | Go, gRPC   |
+| **cart-service**         | Shopping cart management with Redis persistence. | Go, Redis  |
+| **user-service**         | User profile and preferences management.         | Go, SQL    |
+| **offer-service**        | Dynamic pricing and discount engine.             | Go         |
+| **storefront-service**   | Server-side rendered frontend UI.                | Go, HTML   |
+| **analytics-ingest**     | Ingests user behavior events into data pipeline. | Go, Kafka  |
+| **notification-service** | Sends emails/SMS based on Kafka events.          | Go         |
+| **audit-service**        | Compliance logging for all critical actions.     | Go         |
+| **admin-backoffice**     | Internal admin dashboard for managing platform.  | Go, React  |
 
-1. **Create a GCP Project**
-2. **Enable required APIs**
-   ```bash
-   gcloud services enable \
-     compute.googleapis.com \
-     container.googleapis.com \
-     iam.googleapis.com \
-     cloudresourcemanager.googleapis.com \
-     artifactregistry.googleapis.com
-   ```
+---
+
+## 🚀 Installation & Setup
+
+### prerequisites
+
+Ensure you have the following installed:
+
+-   [Go 1.24+](https://go.dev/dl/)
+-   [Docker & Docker Compose](https://www.docker.com/)
+-   [Terraform 1.6+](https://developer.hashicorp.com/terraform/install)
+-   [kubectl](https://kubernetes.io/docs/tasks/tools/)
+-   [Google Cloud SDK](https://cloud.google.com/sdk/docs/install)
+
+### 💻 Option 1: Local Development (Docker Compose)
+
+Run the supporting infrastructure locally for development. Note that this starts the data and observability layers; microservices should be run individually using Go or your IDE.
+
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup.git
+    cd ecommerce-platform
+    ```
+
+2.  **Start Infrastructure (Postgres, Redis, Kafka, Observability):**
+    ```bash
+    docker-compose up -d
+    ```
+
+3.  **Run Services:**
+    You can run individual services using `go run`. For example:
+    ```bash
+    cd services/storefront-service
+    go run main.go
+    ```
+
+4.  **Access Infrastructure:**
+    -   **Grafana**: [http://localhost:3000](http://localhost:3000) (admin/admin)
+    -   **Jaeger**: [http://localhost:16686](http://localhost:16686)
+    -   **Kafka UI** (if configured): [http://localhost:8080](http://localhost:8080)
+
+### ☁️ Option 2: Production Deployment (GKE/Terraform)
+
+Deploy to Google Cloud using Terraform and GitOps.
+
+1.  **Initialize Infrastructure:**
+    ```bash
+    cd infra/terraform
+    terraform init
+    terraform apply -var="project_id=YOUR_PROJECT_ID"
+    ```
+
+2.  **Connect to Cluster:**
+    ```bash
+    gcloud container clusters get-credentials main-cluster --region us-central1
+    ```
+
+3.  **Install Argo CD:**
+    ```bash
+    kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+    ```
+
+4.  **Sync Applications:**
+    Apply the App of Apps pattern to deploy all microservices.
+    ```bash
+    kubectl apply -f argocd/applications/app-of-apps.yaml
+    ```
+
+---
+
+## 🛠️ Development & Contributing
+
+### Running Tests
+We use standard Go testing. To run unit tests across all services:
+
+```bash
+make test
+```
+
+### Building Images
+To build Docker images for all services:
+
+```bash
+make docker-build
+```
+
+### Linting
+Ensure code quality before committing:
+
+```bash
+make lint
+```
+
+---
+
+## 📊 Observability
+
+The platform comes with a pre-configured observability stack.
+
+-   **Grafana**: Metrics visualization and dashboards.
+-   **Prometheus**: Metrics collection.
+-   **Loki**: Log aggregation.
+-   **Tempo**: Distributed tracing.
+-   **Kiali**: Service mesh visualization.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
