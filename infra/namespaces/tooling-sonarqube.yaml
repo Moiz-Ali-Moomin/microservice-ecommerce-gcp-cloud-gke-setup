@@ -1,8 +1,6 @@
-# infra/namespaces/tooling-sonarqube.yaml
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: sonarqube
+  name: tooling-sonarqube
   labels:
     istio-injection: enabled
-    name: sonarqube

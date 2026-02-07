@@ -1,0 +1,24 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaNodePool
+metadata:
+  name: broker-pool
+  namespace: data-kafka
+  labels:
+    strimzi.io/cluster: ecommerce-cluster
+spec:
+  replicas: 3
+  roles:
+    - broker
+    - controller
+  storage:
+    type: persistent-claim
+    size: 20Gi
+    class: kafka-fast-storage
+    deleteClaim: false
+  resources:
+    requests:
+      cpu: "500m"
+      memory: 2Gi
+    limits:
+      cpu: "1000m"
+      memory: 4Gi

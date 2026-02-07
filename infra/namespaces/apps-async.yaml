@@ -1,8 +1,6 @@
-# infra/namespaces/apps-async.yaml
 apiVersion: v1
 kind: Namespace
 metadata:
   name: apps-async
   labels:
     istio-injection: enabled
-    name: apps-async

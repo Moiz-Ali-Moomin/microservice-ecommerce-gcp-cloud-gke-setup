@@ -1,23 +1,20 @@
 global:
   resolve_timeout: 5m
-
 route:
-  group_by: ['alertname', 'service']
+  group_by: ["alertname", "service"]
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 12h
-  receiver: 'default-receiver'
+  receiver: "default-receiver"
   routes:
-  - match:
-      severity: critical
-    receiver: 'pagerduty-or-opsgenie'
-
+    - match:
+        severity: critical
+      receiver: "pagerduty-or-opsgenie"
 receivers:
-- name: 'default-receiver'
-  webhook_configs:
-  - url: 'http://notification-service.ecommerce.svc.cluster.local:8080/internal/alert'
-
-- name: 'pagerduty-or-opsgenie'
-  # Placeholder for real integration
-  email_configs:
-  - to: 'oncall@example.com'
+  - name: "default-receiver"
+    webhook_configs:
+      - url: "http://notification-service.ecommerce.svc.cluster.local:8080/internal/alert"
+  - name: "pagerduty-or-opsgenie"
+    # Placeholder for real integration
+    email_configs:
+      - to: "oncall@example.com"

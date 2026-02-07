@@ -1,4 +1,6 @@
 # infra/gke/nodepools.yaml
+# GKE Node Pools managed via Config Connector
+
 apiVersion: container.cnrm.cloud.google.com/v1beta1
 kind: ContainerNodePool
 metadata:
@@ -7,15 +9,47 @@ metadata:
 spec:
   clusterRef:
     name: ecommerce-platform-prod
+
   location: us-central1
-  nodeConfig:
-    machineType: e2-standard-4
-    diskSizeGb: 100
-    oauthScopes:
-      - "https://www.googleapis.com/auth/cloud-platform"
+
+  management:
+    autoRepair: true
+    autoUpgrade: true
+
   autoscaling:
     minNodeCount: 1
     maxNodeCount: 5
+
+  upgradeSettings:
+    maxSurge: 1
+    maxUnavailable: 0
+
+  nodeConfig:
+    machineType: e2-standard-4
+    diskSizeGb: 100
+    diskType: pd-standard
+    imageType: COS_CONTAINERD
+
+    serviceAccountRef:
+      name: gke-nodes-sa
+
+    oauthScopes:
+      - https://www.googleapis.com/auth/cloud-platform
+
+    workloadMetadataConfig:
+      mode: GKE_METADATA
+
+    shieldedInstanceConfig:
+      enableSecureBoot: true
+      enableIntegrityMonitoring: true
+
+    labels:
+      env: prod
+      team: platform
+      pool: general
+
+    tags:
+      - gke-general
 
 ---
 apiVersion: container.cnrm.cloud.google.com/v1beta1
@@ -26,14 +60,52 @@ metadata:
 spec:
   clusterRef:
     name: ecommerce-platform-prod
+
   location: us-central1
-  nodeConfig:
-    machineType: n2-highmem-8 # For Spark/Kafka
-    diskSizeGb: 200
-    taints:
-      - key: "workload"
-        value: "analytics"
-        effect: "NO_SCHEDULE"
+
+  management:
+    autoRepair: true
+    autoUpgrade: true
+
   autoscaling:
     minNodeCount: 0
     maxNodeCount: 3
+
+  upgradeSettings:
+    maxSurge: 1
+    maxUnavailable: 0
+
+  nodeConfig:
+    machineType: n2-highmem-8
+    diskSizeGb: 200
+    diskType: pd-ssd
+    imageType: COS_CONTAINERD
+
+    # 💸 Cost-optimized for batch / Spark
+    spot: true
+
+    serviceAccountRef:
+      name: gke-nodes-sa
+
+    oauthScopes:
+      - https://www.googleapis.com/auth/cloud-platform
+
+    taints:
+      - key: workload
+        value: analytics
+        effect: NO_SCHEDULE
+
+    workloadMetadataConfig:
+      mode: GKE_METADATA
+
+    shieldedInstanceConfig:
+      enableSecureBoot: true
+      enableIntegrityMonitoring: true
+
+    labels:
+      team: data
+      workload: analytics
+      pool: analytics
+
+    tags:
+      - gke-analytics

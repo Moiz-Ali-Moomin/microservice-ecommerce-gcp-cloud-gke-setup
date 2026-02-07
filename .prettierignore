@@ -1,0 +1,12 @@
+# Prettier Ignore File
+# Ignore Helm templates which are Valid YAML but contain Go templating that Prettier breaks on
+**/templates/**/*.yaml
+**/templates/**/*.yml
+**/*.gotmpl
+**/charts/**
+
+# Ignore other build artifacts
+dist/
+build/
+coverage/
+istio-*

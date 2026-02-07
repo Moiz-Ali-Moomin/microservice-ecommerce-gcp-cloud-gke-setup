@@ -1,48 +1,22 @@
-# infra/sonarqube/values.yaml
-# Production-ready configuration for SonarQube on K8s
-
-# Persistence for data (ElasticSearch indices, plugins)
 persistence:
   enabled: true
-  size: 5Gi
-  storageClass: "standard-rwo"
+  storageClass: standard
+  accessMode: ReadWriteOnce
+  size: 20Gi
 
-# Disable Bundled Postgres (Use external production DB)
-postgresql:
-  enabled: false
+service:
+  type: ClusterIP
+  externalPort: 9000
+  internalPort: 9000
 
-# External Database Connection
-jdbcOverwrite:
-  enable: true
-  # Assumes 'sonarqube' database exists in the shared postgres instance
-  jdbcUrl: "jdbc:postgresql://postgres-primary.data-postgres.svc.cluster.local:5432/sonarqube"
-  jdbcUsername: "sonarqube"
-  # Password should be injected via Secret, but for values reference:
-  jdbcSecretName: "sonarqube-db-creds"
-  jdbcSecretPasswordKey: "password"
-
-# SonarQube Resources
-resources:
-  requests:
-    cpu: 1000m  # SonarQube is Java, needs explicit CPU
-    memory: 2Gi # Min heap
-  limits:
-    cpu: 2000m
-    memory: 4Gi # Max heap
-
-# JVM Options to match resources
-jvmOpts: "-Xmx3072m -Xms2048m -XX:+UseG1GC"
-
-# Readiness/Liveness Probes
-readinessProbe:
-  initialDelaySeconds: 60
-  periodSeconds: 30
-  failureThreshold: 5
-livenessProbe:
-  initialDelaySeconds: 120
-  periodSeconds: 30
-  failureThreshold: 5
-
-# Monitoring
-prometheusExporter:
+ingress:
   enabled: true
+  hosts:
+    - name: sonar.internal.example.com
+      path: /
+
+postgresql:
+  enabled: true
+  postgresqlUsername: sonar
+  postgresqlPassword: sonar
+  postgresqlDatabase: sonar

@@ -1,26 +1,55 @@
-# infra/spark/values.yaml
-# Values for googlecloudplatform/spark-on-k8s-operator
-
-image:
-  repository: gcr.io/spark-operator/spark-operator
-  tag: v1beta2-1.3.8-3.1.1
-
-webhook:
-  enable: true
-
-# Operator Resources (Hardened)
-resources:
-  requests:
-    cpu: 100m
-    memory: 256Mi
-  limits:
-    cpu: 500m
-    memory: 512Mi
-
-resourceQuota:
-  enable: false
-
-# Prometheus monitoring for the operator
-monitoring:
-  prometheus:
-    enable: true
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: SparkApplication
+metadata:
+  name: funnel-analysis
+  namespace: apps-async
+spec:
+  type: Python
+  mode: cluster
+  sparkVersion: "3.4.1"
+  image: docker.io/apache/spark:3.4.1
+  imagePullPolicy: IfNotPresent
+  mainApplicationFile: local:///opt/spark/jobs/funnel_analysis.py
+  restartPolicy:
+    type: OnFailure
+    onFailureRetries: 3
+    onFailureRetryInterval: 10
+    onSubmissionFailureRetries: 5
+  driver:
+    cores: 1
+    coreLimit: "1000m"
+    memory: "512m"
+    serviceAccount: spark-sa
+    env:
+      - name: DB_URL
+        value: jdbc:postgresql://postgres-primary.data-postgres.svc.cluster.local:5432/ecommerce_db
+      - name: DB_USER
+        valueFrom:
+          secretKeyRef:
+            name: postgres-creds
+            key: username
+      - name: DB_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: postgres-creds
+            key: password
+  executor:
+    cores: 1
+    instances: 2
+    memory: "1024m"
+    env:
+      - name: DB_URL
+        value: jdbc:postgresql://postgres-primary.data-postgres.svc.cluster.local:5432/ecommerce_db
+      - name: DB_USER
+        valueFrom:
+          secretKeyRef:
+            name: postgres-creds
+            key: username
+      - name: DB_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: postgres-creds
+            key: password
+  deps:
+    packages:
+      - org.postgresql:postgresql:42.6.0

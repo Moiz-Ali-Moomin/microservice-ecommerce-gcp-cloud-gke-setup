@@ -5,17 +5,20 @@ metadata:
   namespace: platform-argocd
 spec:
   description: "Core Platform Infrastructure (Istio, Namespaces)"
+
   sourceRepos:
-  - '*'
+    - "*"
+
   destinations:
-  - namespace: 'istio-system'
-    server: https://kubernetes.default.svc
-  - namespace: 'platform-*'
-    server: https://kubernetes.default.svc
-  - namespace: 'apps-*' # Needs to manage namespaces themselves
-    server: https://kubernetes.default.svc
-  - namespace: 'data-*'
-    server: https://kubernetes.default.svc
+    - namespace: istio-system
+      server: https://kubernetes.default.svc
+    - namespace: "platform-*"
+      server: https://kubernetes.default.svc
+    - namespace: "apps-*"
+      server: https://kubernetes.default.svc # manages namespaces
+    - namespace: "data-*"
+      server: https://kubernetes.default.svc
+
   clusterResourceWhitelist:
-  - group: '*'
-    kind: '*' # Platform needs high privileges
+    - group: "*"
+      kind: "*" # platform needs elevated privileges

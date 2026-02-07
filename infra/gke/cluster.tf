@@ -3,9 +3,9 @@ resource "google_container_cluster" "primary" {
   location = var.region
   project  = var.project_id
 
-  # We can't create a cluster with no node pool defined, but we want to only use
-  # separately managed node pools. So we create the smallest possible default
-  # node pool and immediately delete it.
+  # We can't create a cluster with no node pool defined,
+  # so we create the smallest possible default node pool
+  # and immediately delete it.
   remove_default_node_pool = true
   initial_node_count       = 1
 
@@ -31,11 +31,11 @@ resource "google_container_cluster" "primary" {
 
   private_cluster_config {
     enable_private_nodes    = true
-    enable_private_endpoint = false # Set to true for fully private access (requires VPN/Bastion)
+    enable_private_endpoint = false # true = fully private (VPN/Bastion needed)
     master_ipv4_cidr_block  = "172.16.0.0/28"
   }
 
-  # Dataplane V2
+  # Dataplane V2 (eBPF)
   datapath_provider = "ADVANCED_DATAPATH"
 
   # Maintenance Window
@@ -49,10 +49,10 @@ resource "google_container_cluster" "primary" {
     channel = "REGULAR"
   }
 
-  # Cost Management
+  # Cost visibility
   cost_management_config {
     enabled = true
   }
 
-  deletion_protection = false # Set to true for production to prevent accidental deletion
+  deletion_protection = false # set true in locked-down prod
 }

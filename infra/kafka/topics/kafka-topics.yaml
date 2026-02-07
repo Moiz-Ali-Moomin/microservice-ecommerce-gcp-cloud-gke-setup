@@ -1,0 +1,50 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: page.viewed
+  namespace: data-kafka
+  labels:
+    strimzi.io/cluster: ecommerce-cluster
+    tier: events
+spec:
+  partitions: 6
+  replicas: 3
+  config:
+    retention.ms: 604800000        # 7 days
+    min.insync.replicas: 2
+    cleanup.policy: delete
+    segment.bytes: 1073741824      # 1GiB segments
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: cta.clicked
+  namespace: data-kafka
+  labels:
+    strimzi.io/cluster: ecommerce-cluster
+    tier: events
+spec:
+  partitions: 6
+  replicas: 3
+  config:
+    retention.ms: 604800000
+    min.insync.replicas: 2
+    cleanup.policy: delete
+    segment.bytes: 1073741824
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: checkout.completed
+  namespace: data-kafka
+  labels:
+    strimzi.io/cluster: ecommerce-cluster
+    tier: business
+spec:
+  partitions: 6
+  replicas: 3
+  config:
+    retention.ms: 1209600000       # 14 days (business-critical)
+    min.insync.replicas: 2
+    cleanup.policy: delete
+    segment.bytes: 1073741824

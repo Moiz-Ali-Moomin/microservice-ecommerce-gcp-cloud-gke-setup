@@ -38,7 +38,7 @@ func (h *Handler) HandleUsers(w http.ResponseWriter, r *http.Request) {
 	// Mock Save
 	u.ID = "u_generated_123"
 	u.CreatedAt = time.Now()
-	
+
 	logger.Log.Info("Created new user", zap.String("email", u.Email))
 
 	w.WriteHeader(http.StatusCreated)
@@ -47,7 +47,7 @@ func (h *Handler) HandleUsers(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) HandleUserByID(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/users/")
-	
+
 	// Mock Fetch
 	u := User{
 		ID:        id,
@@ -58,4 +58,3 @@ func (h *Handler) HandleUserByID(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(u)
 }
-

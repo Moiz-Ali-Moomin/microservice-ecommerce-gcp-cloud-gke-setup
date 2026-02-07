@@ -12,7 +12,7 @@ import (
 
 func main() {
 	logger.Init("feature-flag-service")
-	
+
 	tp, err := tracing.InitTracer("feature-flag-service")
 	if err != nil {
 		logger.Log.Fatal("Failed to init tracer", zap.Error(err))
@@ -42,4 +42,3 @@ func GetFlags(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(flags)
 }
-

@@ -1,5 +1,6 @@
 # infra/gke/cluster.yaml
-# GKE Standard Cluster Definition
+# GKE Standard Cluster (Config Connector)
+
 apiVersion: container.cnrm.cloud.google.com/v1beta1
 kind: ContainerCluster
 metadata:
@@ -7,15 +8,40 @@ metadata:
   namespace: config-control
 spec:
   location: us-central1
+
+  # Required placeholder when managing node pools separately
   initialNodeCount: 1
-  # Network config would go here (VPC-native)
+
+  # VPC-native networking
   networkingMode: VPC_NATIVE
   ipAllocationPolicy:
     clusterIpv4CidrBlock: ""
     servicesIpv4CidrBlock: ""
+
   # Shielded Nodes
   shieldedInstanceConfig:
     enableSecureBoot: true
+
   # Workload Identity
   workloadIdentityConfig:
-    workloadPool: "PROJECT_ID.svc.id.goog"
+    workloadPool: PROJECT_ID.svc.id.goog
+
+  # Network Policy (Calico)
+  networkPolicy:
+    enabled: true
+
+  # Dataplane v2 (eBPF)
+  datapathProvider: ADVANCED_DATAPATH
+
+  # Release channel for safe upgrades
+  releaseChannel:
+    channel: REGULAR
+
+  # Cost visibility
+  costManagementConfig:
+    enabled: true
+
+  # Maintenance window
+  maintenancePolicy:
+    dailyMaintenanceWindow:
+      startTime: "03:00"

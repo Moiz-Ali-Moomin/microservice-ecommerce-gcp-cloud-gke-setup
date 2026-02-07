@@ -1,24 +1,25 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 
+	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/httpserver"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/logger"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/tracing"
-	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/httpserver"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/user-service/internal/handler"
 	"go.uber.org/zap"
 )
 
 func main() {
 	logger.Init("user-service")
-	
+
 	tp, err := tracing.InitTracer("user-service")
 	if err != nil {
 		logger.Log.Fatal("Failed to init tracer", zap.Error(err))
 	}
-	defer func() { _ = tp.Shutdown(nil) }()
+	defer func() { _ = tp.Shutdown(context.TODO()) }()
 
 	h := handler.New()
 
@@ -35,4 +36,3 @@ func main() {
 		log.Fatalf("Server startup failed: %v", err)
 	}
 }
-

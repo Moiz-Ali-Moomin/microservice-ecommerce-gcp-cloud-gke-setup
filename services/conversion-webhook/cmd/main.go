@@ -6,16 +6,16 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/conversion-webhook/internal/handler"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/event"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/logger"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/tracing"
-	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/conversion-webhook/internal/handler"
 	"go.uber.org/zap"
 )
 
 func main() {
 	logger.Init("conversion-webhook")
-	
+
 	tp, err := tracing.InitTracer("conversion-webhook")
 	if err != nil {
 		logger.Log.Fatal("Failed to init tracer", zap.Error(err))
@@ -49,4 +49,3 @@ func main() {
 		log.Fatalf("Server failed: %v", err)
 	}
 }
-

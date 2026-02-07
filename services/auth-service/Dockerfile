@@ -3,14 +3,13 @@
 FROM golang:1.24 AS builder
 WORKDIR /app
 
-# 1. Copy shared library (Dependency)
+# 1. Copy shared library
 COPY services/shared-lib ./services/shared-lib
 
-# 2. Copy go.mod (required) and go.sum (optional via glob pattern)
-#    The go.su[m] pattern matches go.sum if present, but doesn't fail if missing.
+# 2. Copy go.mod and optional go.sum
 COPY services/auth-service/go.mod services/auth-service/go.su[m] ./services/auth-service/
 
-# 3. Download dependencies with Cache Mounts
+# 3. Download dependencies with cache
 WORKDIR /app/services/auth-service
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
@@ -18,7 +17,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # 4. Copy source code
 COPY services/auth-service /app/services/auth-service
 
-# 5. Build binary with Cache Mounts
+# 5. Build binary
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
@@ -26,8 +25,12 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 # ---------- Runtime ----------
 FROM gcr.io/distroless/static-debian12:nonroot
+
 WORKDIR /app
 COPY --from=builder /app/server /app/server
+
 USER nonroot
 EXPOSE 8080
-ENTRYPOINT ["/app/server"]
+
+# ✅ CHANGED: CMD instead of ENTRYPOINT
+CMD ["/app/server"]

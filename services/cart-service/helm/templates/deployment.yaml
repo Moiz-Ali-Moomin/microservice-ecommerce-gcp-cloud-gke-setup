@@ -18,21 +18,28 @@ spec:
     spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+
       containers:
         - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+
           ports:
             - name: http
-              containerPort: 8080
+              containerPort: {{ .Values.service.port }}
               protocol: TCP
+
+          {{- /* ---------- ENV (Kafka + Redis only) ---------- */}}
+          {{- if or .Values.env .Values.envSecrets }}
           env:
             {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}
             {{- end }}
-            {{- if .Values.envSecrets }}
+
             {{- range $key, $val := .Values.envSecrets }}
             - name: {{ $key }}
               valueFrom:
@@ -40,10 +47,13 @@ spec:
                   name: {{ $val.name }}
                   key: {{ $val.key }}
             {{- end }}
-            {{- end }}
+          {{- end }}
+
           livenessProbe:
             {{- toYaml .Values.livenessProbe | nindent 12 }}
+
           readinessProbe:
             {{- toYaml .Values.readinessProbe | nindent 12 }}
+
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

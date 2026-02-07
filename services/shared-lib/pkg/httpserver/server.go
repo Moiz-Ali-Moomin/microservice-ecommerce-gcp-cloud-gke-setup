@@ -20,23 +20,23 @@ type Server struct {
 
 func New(handler http.Handler, serviceName string, port string) *Server {
 	mux := http.NewServeMux()
-	
+
 	// Add observability endpoints
 	mux.Handle("/metrics", promhttp.Handler())
-	
+
 	// Wrap user handler with middleware
 	instrumentedHandler := middleware.Chain(
 		handler,
 		middleware.Tracing(serviceName),
 		middleware.Metrics,
 	)
-	
+
 	// Mount everything
 	// Note: In a real router like Chi/Gin, this mounting logic would be cleaner.
 	// We assume 'handler' handles its own routing, so we wrap it.
 	// But we need /metrics to bypass auth/etc usually.
 	// For this simple mux setup:
-	
+
 	finalHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/metrics" {
 			promhttp.Handler().ServeHTTP(w, r)
@@ -66,23 +66,22 @@ func (s *Server) Run() error {
 	// Wait for interrupt signal for graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	
+
 	select {
 	case err := <-srvErr:
 		return err
 	case <-quit:
 		logger.Log.Info("Shutting down server...")
-		
+
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		
+
 		if err := s.httpServer.Shutdown(ctx); err != nil {
 			logger.Log.Error("Server forced to shutdown", zap.Error(err))
 			return err
 		}
-		
+
 		logger.Log.Info("Server exited properly")
 		return nil
 	}
 }
-

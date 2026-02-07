@@ -6,16 +6,16 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/landing-service/internal/handler"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/event"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/logger"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/tracing"
-	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/landing-service/internal/handler"
 	"go.uber.org/zap"
 )
 
 func main() {
 	logger.Init("landing-service")
-	
+
 	tp, err := tracing.InitTracer("landing-service")
 	if err != nil {
 		logger.Log.Fatal("Failed to init tracer", zap.Error(err))
@@ -48,4 +48,3 @@ func main() {
 		log.Fatalf("Server failed: %v", err)
 	}
 }
-

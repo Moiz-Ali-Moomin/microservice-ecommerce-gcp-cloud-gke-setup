@@ -1,11 +1,13 @@
 replicaCount: 1
+
 image:
   repository: us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo/auth-service
   tag: latest
+
 service:
   type: ClusterIP
   port: 8080
-# PROD Resources
+
 resources:
   requests:
     cpu: 250m
@@ -24,15 +26,33 @@ podDisruptionBudget:
   enabled: true
   minAvailable: 1
 
-# Environment variables
+# Non-secret env (Added the missing variables your Go code requires)
 env:
-  KAFKA_BROKERS: kafka-bootstrap.kafka.svc.cluster.local:9092
-  REDIS_ADDR: redis-master.default.svc.cluster.local:6379
-  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.platform-observability.svc.cluster.local:4317
-  OTEL_SERVICE_NAME: auth-service
+  # Infrastructure Hosts
+  DB_HOST: "postgres-primary.data.svc.cluster.local"
+  DB_PORT: "5432"
+  DB_NAME: "ecommerce_db"
+  REDIS_HOST: "redis-master.data.svc.cluster.local"
+  REDIS_PORT: "6379"
 
-# Secrets config
+  # Observability
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.platform-observability.svc.cluster.local:4317"
+  OTEL_SERVICE_NAME: "auth-service"
+
+  # Optional Kafka
+  KAFKA_BROKERS: ""
+
+# Secrets (Explicit mapping to your Go mustEnv calls)
 envSecrets:
-  POSTGRES_DSN:
-    name: "auth-service-secrets"
-    key: "postgres-dsn"
+  JWT_SECRET:
+    name: auth-jwt-secret
+    key: JWT_SECRET
+  DB_USER:
+    name: auth-service-secrets
+    key: db-user
+  DB_PASSWORD:
+    name: auth-service-secrets
+    key: db-password
+  REDIS_PASSWORD:
+    name: auth-redis-secret
+    key: REDIS_PASSWORD

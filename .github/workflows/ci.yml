@@ -2,10 +2,12 @@ name: Platform CI/CD
 
 on:
   push:
-    branches: ["main"]
+    branches:
+      - main
     paths-ignore:
       - "**.md"
       - "docs/**"
+
   pull_request:
     paths-ignore:
       - "**.md"
@@ -17,8 +19,8 @@ permissions:
   security-events: write
 
 # Hardened Concurrency:
-# Cancel in-progress runs on PRs to save costs.
-# Do NOT cancel on main, to prevent Terraform state locking issues.
+# - Cancel in-progress runs on PRs to save costs
+# - Do NOT cancel on main to prevent Terraform state locking
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -112,12 +114,12 @@ jobs:
           exit-code: ${{ github.ref == 'refs/heads/main' && '1' || '0' }}
 
   # =====================================================
-  # 3. SONARQUBE (Run in PARALLEL with Security Scan)
+  # 3. SONARQUBE (PARALLEL)
   # =====================================================
   sonarqube:
     name: SonarQube – Static Analysis
     runs-on: ubuntu-latest
-    needs: quality-check # Unblocked from build-services/security-scan
+    needs: quality-check
     timeout-minutes: 20
 
     steps:
@@ -144,8 +146,7 @@ jobs:
   terraform:
     name: Terraform – Platform Infra
     runs-on: ubuntu-latest
-    # Hardened: Deployment waits for Security Scan (Gate), but NOT SonarQube (Async Quality)
-    needs: [security-scan] 
+    needs: security-scan
     environment: prod
     timeout-minutes: 30
 
@@ -215,6 +216,7 @@ jobs:
             --project ${{ secrets.GCP_PROJECT_ID }}
 
       - run: kubectl apply -f infra/namespaces/
+
       - run: |
           kubectl apply -f infra/istio/base/
           kubectl apply -f infra/istio/auth-policies/
@@ -254,7 +256,6 @@ jobs:
             if [ -f "$svc/Dockerfile" ]; then
               NAME=$(basename "$svc")
               IMAGE="$GAR_REGION/${{ secrets.GCP_PROJECT_ID }}/$ARTIFACT_REPO/$NAME:${{ github.sha }}"
-              # Fix: Use root context (.) so Dockerfile can COPY sibling directories like shared-lib
               docker build -t $IMAGE -f $svc/Dockerfile .
               docker push $IMAGE
             fi

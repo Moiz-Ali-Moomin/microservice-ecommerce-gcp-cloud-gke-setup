@@ -1,17 +1,3 @@
-# infra/istio/security/peer-authentication.yaml
-
-# 1. Mesh-wide Default (Optional - explicit is better)
-# apiVersion: security.istio.io/v1beta1
-# kind: PeerAuthentication
-# metadata:
-#   name: default
-#   namespace: istio-system
-# spec:
-#   mtls:
-#     mode: STRICT
-
----
-# 2. Namespace-level mTLS for ecommerce services
 apiVersion: security.istio.io/v1beta1
 kind: PeerAuthentication
 metadata:
@@ -20,20 +6,3 @@ metadata:
 spec:
   mtls:
     mode: STRICT
-
----
-# 3. Exception: conversion-webhook (needs PERMISSIVE for external calls if not going through gateway)
-apiVersion: security.istio.io/v1beta1
-kind: PeerAuthentication
-metadata:
-  name: conversion-webhook-permissive
-  namespace: ecommerce
-spec:
-  selector:
-    matchLabels:
-      app: conversion-webhook
-  mtls:
-    mode: PERMISSIVE
-  portLevelMtls:
-    8080:
-      mode: PERMISSIVE

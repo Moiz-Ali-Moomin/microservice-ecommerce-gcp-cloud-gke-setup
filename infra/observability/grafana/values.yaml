@@ -1,19 +1,36 @@
-# infra/observability/grafana/values.yaml
-# Values for grafana/grafana
 persistence:
   enabled: true
   size: 10Gi
-adminPassword: "admin" # Change in prod via secret
+  storageClassName: standard
+
+adminPassword: "admin"
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: istio
+  hosts:
+    - grafana.ecommerce.svc.cluster.local
+  path: /
+
 datasources:
   datasources.yaml:
     apiVersion: 1
     datasources:
-    - name: Prometheus
-      type: prometheus
-      url: http://prometheus-operated.observ.svc.cluster.local:9090
-    - name: Loki
-      type: loki
-      url: http://loki.observ.svc.cluster.local:3100
-    - name: Tempo
-      type: tempo
-      url: http://tempo.observ.svc.cluster.local:3100
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus-server.platform-observability.svc.cluster.local
+        access: proxy
+        isDefault: true
+      - name: Loki
+        type: loki
+        url: http://loki.platform-observability.svc.cluster.local:3100
+        access: proxy
+      - name: Tempo
+        type: tempo
+        url: http://tempo.platform-observability.svc.cluster.local:3100
+        access: proxy

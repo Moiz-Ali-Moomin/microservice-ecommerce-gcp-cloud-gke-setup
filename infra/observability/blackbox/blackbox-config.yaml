@@ -12,11 +12,12 @@ data:
         prober: http
         timeout: 5s
         http:
-          valid_status_codes: []  # Defaults to 2xx
+          valid_status_codes: []   # Defaults to 2xx
           method: GET
           no_follow_redirects: false
-          fail_if_ssl: false # Internal mTLS might complicate this, false for generic
-          preferred_ip_protocol: "ip4"
+          fail_if_ssl: false       # Internal mTLS might complicate this
+          preferred_ip_protocol: ip4
+
       http_post_2xx:
         prober: http
         timeout: 5s

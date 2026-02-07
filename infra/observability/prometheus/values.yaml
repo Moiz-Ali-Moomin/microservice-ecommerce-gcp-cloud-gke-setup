@@ -1,17 +1,25 @@
-# infra/observability/prometheus/values.yaml
-# Values for prometheus-community/kube-prometheus-stack
-prometheus:
-  prometheusSpec:
-    retention: 15d
-    storageSpec:
-      volumeClaimTemplate:
-        spec:
-          storageClassName: standard-rwo
-          accessModes: ["ReadWriteOnce"]
-          resources:
-            requests:
-              storage: 50Gi
-    enableFeatures:
-      - "remote-write-receiver"
-grafana:
-  enabled: false # We deploy Grafana separately or disable this in favor of independent chart
+server:
+  retention: 15d
+  persistentVolume:
+    enabled: true
+    size: 50Gi
+    storageClass: standard
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: 1000m
+      memory: 4Gi
+
+alertmanager:
+  enabled: true
+  persistence:
+    enabled: true
+    size: 10Gi
+
+kubeStateMetrics:
+  enabled: true
+
+nodeExporter:
+  enabled: true

@@ -5,13 +5,16 @@ metadata:
   namespace: platform-argocd
 spec:
   description: "Ops Tooling (Airflow, Sonar, Spark)"
+
   sourceRepos:
-  - '*'
+    - "*"
+
   destinations:
-  - namespace: 'sonarqube'
-    server: https://kubernetes.default.svc
-  - namespace: 'apps-async' # Spark/Airflow
-    server: https://kubernetes.default.svc
+    - namespace: sonarqube
+      server: https://kubernetes.default.svc
+    - namespace: apps-async # Spark / Airflow
+      server: https://kubernetes.default.svc
+
   clusterResourceWhitelist:
-  - group: '*'
-    kind: '*' # Tooling often needs CRDs (Spark, etc)
+    - group: "*"
+      kind: "*" # tooling often needs CRDs (Spark, etc)

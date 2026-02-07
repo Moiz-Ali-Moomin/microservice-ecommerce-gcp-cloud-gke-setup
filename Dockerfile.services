@@ -3,6 +3,7 @@
 # ============================================================================
 # UNIFIED GO MICROSERVICES BUILDER - Production Grade
 # ============================================================================
+
 # Architecture:
 #   1. deps    - Download all dependencies ONCE (cached unless go.mod changes)
 #   2. builder - Compile ALL binaries in parallel (cached unless source changes)
@@ -11,217 +12,113 @@
 # Optimizations:
 #   - go.mod/go.sum copied FIRST for dependency layer caching
 #   - BuildKit cache mounts for /go/pkg/mod and go-build cache
-#   - Parallel compilation using shell backgrounding
-#   - Static binaries: CGO_ENABLED=0, stripped with -ldflags="-w -s"
-#   - Distroless nonroot runtime for minimal attack surface
+#   - Parallel compilation
+#   - Static binaries (CGO_ENABLED=0)
+#   - Distroless nonroot runtime
 # ============================================================================
 
+# ----------------------------------------------------------------------------
+# DEPS STAGE
+# ----------------------------------------------------------------------------
 FROM golang:1.24-bookworm AS deps
 
 WORKDIR /app
 
-# 1. Copy ONLY go.mod and go.sum files (dependency definitions)
-#    This layer is cached unless dependencies change.
-COPY services/shared-lib/go.mod services/shared-lib/go.su[m] ./services/shared-lib/
-COPY services/admin-backoffice-service/go.mod services/admin-backoffice-service/go.su[m] ./services/admin-backoffice-service/
-COPY services/analytics-ingest-service/go.mod services/analytics-ingest-service/go.su[m] ./services/analytics-ingest-service/
-COPY services/api-gateway/go.mod services/api-gateway/go.su[m] ./services/api-gateway/
-COPY services/attribution-service/go.mod services/attribution-service/go.su[m] ./services/attribution-service/
-COPY services/audit-service/go.mod services/audit-service/go.su[m] ./services/audit-service/
-COPY services/auth-service/go.mod services/auth-service/go.su[m] ./services/auth-service/
-COPY services/cart-service/go.mod services/cart-service/go.su[m] ./services/cart-service/
-COPY services/conversion-webhook/go.mod services/conversion-webhook/go.su[m] ./services/conversion-webhook/
-COPY services/feature-flag-service/go.mod services/feature-flag-service/go.su[m] ./services/feature-flag-service/
-COPY services/landing-service/go.mod services/landing-service/go.su[m] ./services/landing-service/
-COPY services/notification-service/go.mod services/notification-service/go.su[m] ./services/notification-service/
-COPY services/offer-service/go.mod services/offer-service/go.su[m] ./services/offer-service/
-COPY services/redirect-service/go.mod services/redirect-service/go.su[m] ./services/redirect-service/
-COPY services/reporting-service/go.mod services/reporting-service/go.su[m] ./services/reporting-service/
+# Copy go.mod / go.sum ONLY (dependency cache layer)
+COPY services/shared-lib/go.mod services/shared-lib/go.sum ./services/shared-lib/
+COPY services/admin-backoffice-service/go.mod services/admin-backoffice-service/go.sum ./services/admin-backoffice-service/
+COPY services/analytics-ingest-service/go.mod services/analytics-ingest-service/go.sum ./services/analytics-ingest-service/
+COPY services/api-gateway/go.mod services/api-gateway/go.sum ./services/api-gateway/
+COPY services/attribution-service/go.mod services/attribution-service/go.sum ./services/attribution-service/
+COPY services/audit-service/go.mod services/audit-service/go.sum ./services/audit-service/
+COPY services/auth-service/go.mod services/auth-service/go.sum ./services/auth-service/
+COPY services/cart-service/go.mod services/cart-service/go.sum ./services/cart-service/
+COPY services/conversion-webhook/go.mod services/conversion-webhook/go.sum ./services/conversion-webhook/
+COPY services/feature-flag-service/go.mod services/feature-flag-service/go.sum ./services/feature-flag-service/
+COPY services/landing-service/go.mod services/landing-service/go.sum ./services/landing-service/
+COPY services/notification-service/go.mod services/notification-service/go.sum ./services/notification-service/
+COPY services/offer-service/go.mod services/offer-service/go.sum ./services/offer-service/
+COPY services/redirect-service/go.mod services/redirect-service/go.sum ./services/redirect-service/
+COPY services/reporting-service/go.mod services/reporting-service/go.sum ./services/reporting-service/
 COPY services/storefront-service/go.mod services/storefront-service/go.sum ./services/storefront-service/
 COPY services/user-service/go.mod services/user-service/go.sum ./services/user-service/
 COPY services/product-service/go.mod services/product-service/go.sum ./services/product-service/
 
-# 2. Download ALL dependencies in one cached layer
+# Download dependencies (cached)
 RUN --mount=type=cache,target=/go/pkg/mod \
-    cd /app/services/shared-lib && go mod download && \
-    cd /app/services/admin-backoffice-service && go mod download && \
-    cd /app/services/analytics-ingest-service && go mod download && \
-    cd /app/services/api-gateway && go mod download && \
-    cd /app/services/attribution-service && go mod download && \
-    cd /app/services/audit-service && go mod download && \
-    cd /app/services/auth-service && go mod download && \
-    cd /app/services/cart-service && go mod download && \
-    cd /app/services/conversion-webhook && go mod download && \
-    cd /app/services/feature-flag-service && go mod download && \
-    cd /app/services/landing-service && go mod download && \
-    cd /app/services/notification-service && go mod download && \
-    cd /app/services/offer-service && go mod download && \
-    cd /app/services/redirect-service && go mod download && \
-    cd /app/services/reporting-service && go mod download && \
-    cd /app/services/storefront-service && go mod download && \
-    cd /app/services/user-service && go mod download && \
-    cd /app/services/product-service && go mod download
+    cd services/shared-lib && go mod download && \
+    cd ../admin-backoffice-service && go mod download && \
+    cd ../analytics-ingest-service && go mod download && \
+    cd ../api-gateway && go mod download && \
+    cd ../attribution-service && go mod download && \
+    cd ../audit-service && go mod download && \
+    cd ../auth-service && go mod download && \
+    cd ../cart-service && go mod download && \
+    cd ../conversion-webhook && go mod download && \
+    cd ../feature-flag-service && go mod download && \
+    cd ../landing-service && go mod download && \
+    cd ../notification-service && go mod download && \
+    cd ../offer-service && go mod download && \
+    cd ../redirect-service && go mod download && \
+    cd ../reporting-service && go mod download && \
+    cd ../storefront-service && go mod download && \
+    cd ../user-service && go mod download && \
+    cd ../product-service && go mod download
 
-# ============================================================================
-# BUILDER - Compile all binaries
-# ============================================================================
+# ----------------------------------------------------------------------------
+# BUILDER STAGE
+# ----------------------------------------------------------------------------
 FROM deps AS builder
 
-# 3. Copy source code (this layer invalidates on code change, but deps are cached)
+WORKDIR /app
+
 COPY services ./services
 
-# 4. Create output directory and build ALL binaries
-#    Using parallel builds with & and wait for low-CPU efficiency
+ENV CGO_ENABLED=0 \
+    GOOS=linux \
+    GOARCH=amd64
+
 RUN mkdir -p /binaries
 
-# Set build environment once
-ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
-
-# Build all services (parallel where possible, with wait to ensure completion)
-# Build all services with fail-fast parallel execution
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     set -e; \
+    services="\
+      admin-backoffice-service \
+      analytics-ingest-service \
+      api-gateway \
+      attribution-service \
+      audit-service \
+      auth-service \
+      cart-service \
+      conversion-webhook \
+      feature-flag-service \
+      landing-service \
+      notification-service \
+      offer-service \
+      product-service \
+      redirect-service \
+      reporting-service \
+      storefront-service \
+      user-service"; \
     pids=""; \
-    # List of services to build
-    services="admin-backoffice-service analytics-ingest-service api-gateway attribution-service audit-service auth-service cart-service conversion-webhook feature-flag-service landing-service notification-service offer-service product-service redirect-service reporting-service storefront-service user-service"; \
     for svc in $services; do \
-    echo "Starting build for $svc..."; \
-    ( \
-    cd /app/services/$svc; \
-    if [ -f "./cmd/main.go" ]; then target="./cmd/main.go"; else target="./main.go"; fi; \
-    go build -ldflags="-w -s" -o /binaries/$svc $target || { echo "❌ Build failed for $svc"; exit 1; } \
-    ) & \
-    pids="$pids $!"; \
+      echo "Building $svc"; \
+      ( \
+        cd services/$svc && \
+        if [ -f ./cmd/main.go ]; then \
+          target=./cmd/main.go; \
+        else \
+          target=./main.go; \
+        fi && \
+        go build -ldflags="-w -s" -o /binaries/$svc $target \
+      ) & \
+      pids="$pids $!"; \
     done; \
-    # Wait for all builds and check exit codes
-    for pid in $pids; do \
-    wait $pid || { echo "❌ A background build failed"; exit 1; }; \
-    done; \
-    echo "✅ All services built successfully"
+    for pid in $pids; do wait $pid; done
 
-# ============================================================================
-# RUNTIME STAGES - Minimal distroless images per service
-# ============================================================================
+# ----------------------------------------------------------------------------
+# RUNTIME STAGES (DISTROLESS)
+# ----------------------------------------------------------------------------
 
-FROM gcr.io/distroless/static-debian12:nonroot AS admin-backoffice-service
-WORKDIR /app
-COPY --from=builder /binaries/admin-backoffice-service /app/server
-USER nonroot
-EXPOSE 8080
-ENTRYPOINT ["/app/server"]
-
-FROM gcr.io/distroless/static-debian12:nonroot AS analytics-ingest-service
-WORKDIR /app
-COPY --from=builder /binaries/analytics-ingest-service /app/server
-USER nonroot
-EXPOSE 8080
-ENTRYPOINT ["/app/server"]
-
-FROM gcr.io/distroless/static-debian12:nonroot AS api-gateway
-WORKDIR /app
-COPY --from=builder /binaries/api-gateway /app/server
-USER nonroot
-EXPOSE 8080
-ENTRYPOINT ["/app/server"]
-
-FROM gcr.io/distroless/static-debian12:nonroot AS attribution-service
-WORKDIR /app
-COPY --from=builder /binaries/attribution-service /app/server
-USER nonroot
-EXPOSE 8080
-ENTRYPOINT ["/app/server"]
-
-FROM gcr.io/distroless/static-debian12:nonroot AS audit-service
-WORKDIR /app
-COPY --from=builder /binaries/audit-service /app/server
-USER nonroot
-EXPOSE 8080
-ENTRYPOINT ["/app/server"]
-
-FROM gcr.io/distroless/static-debian12:nonroot AS auth-service
-WORKDIR /app
-COPY --from=builder /binaries/auth-service /app/server
-USER nonroot
-EXPOSE 8080
-ENTRYPOINT ["/app/server"]
-
-FROM gcr.io/distroless/static-debian12:nonroot AS cart-service
-WORKDIR /app
-COPY --from=builder /binaries/cart-service /app/server
-USER nonroot
-EXPOSE 8080
-ENTRYPOINT ["/app/server"]
-
-FROM gcr.io/distroless/static-debian12:nonroot AS conversion-webhook
-WORKDIR /app
-COPY --from=builder /binaries/conversion-webhook /app/server
-USER nonroot
-EXPOSE 8080
-ENTRYPOINT ["/app/server"]
-
-FROM gcr.io/distroless/static-debian12:nonroot AS feature-flag-service
-WORKDIR /app
-COPY --from=builder /binaries/feature-flag-service /app/server
-USER nonroot
-EXPOSE 8080
-ENTRYPOINT ["/app/server"]
-
-FROM gcr.io/distroless/static-debian12:nonroot AS landing-service
-WORKDIR /app
-COPY --from=builder /binaries/landing-service /app/server
-USER nonroot
-EXPOSE 8080
-ENTRYPOINT ["/app/server"]
-
-FROM gcr.io/distroless/static-debian12:nonroot AS notification-service
-WORKDIR /app
-COPY --from=builder /binaries/notification-service /app/server
-USER nonroot
-EXPOSE 8080
-ENTRYPOINT ["/app/server"]
-
-FROM gcr.io/distroless/static-debian12:nonroot AS offer-service
-WORKDIR /app
-COPY --from=builder /binaries/offer-service /app/server
-USER nonroot
-EXPOSE 8080
-ENTRYPOINT ["/app/server"]
-
-FROM gcr.io/distroless/static-debian12:nonroot AS redirect-service
-WORKDIR /app
-COPY --from=builder /binaries/redirect-service /app/server
-USER nonroot
-EXPOSE 8080
-ENTRYPOINT ["/app/server"]
-
-FROM gcr.io/distroless/static-debian12:nonroot AS reporting-service
-WORKDIR /app
-COPY --from=builder /binaries/reporting-service /app/server
-USER nonroot
-EXPOSE 8080
-ENTRYPOINT ["/app/server"]
-
-FROM gcr.io/distroless/static-debian12:nonroot AS storefront-service
-WORKDIR /app
-COPY --from=builder /binaries/storefront-service /app/server
-# Storefront needs templates and static assets at runtime
-COPY --from=builder /app/services/storefront-service/templates /app/templates
-COPY --from=builder /app/services/storefront-service/static /app/static
-USER nonroot
-EXPOSE 8080
-ENTRYPOINT ["/app/server"]
-
-FROM gcr.io/distroless/static-debian12:nonroot AS user-service
-WORKDIR /app
-COPY --from=builder /binaries/user-service /app/server
-USER nonroot
-EXPOSE 8080
-ENTRYPOINT ["/app/server"]
-
-FROM gcr.io/distroless/static-debian12:nonroot AS product-service
-WORKDIR /app
-COPY --from=builder /binaries/product-service /app/server
-USER nonroot
-EXPOSE 8080
-ENTRYPOINT ["/app/server"]
+FROM gcr.io/distroless

@@ -1,8 +1,6 @@
-# infra/namespaces/data-kafka.yaml
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: data-kafka # Replaces 'kafka' namespace
+  name: data-kafka
   labels:
     istio-injection: disabled
-    name: data-kafka

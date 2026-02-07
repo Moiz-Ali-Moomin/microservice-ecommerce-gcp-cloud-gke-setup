@@ -45,4 +45,3 @@ envSecrets:
   POSTGRES_DSN:
     name: "api-gateway-secrets"
     key: "postgres-dsn"
-

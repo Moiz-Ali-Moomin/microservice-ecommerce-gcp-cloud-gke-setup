@@ -1,9 +1,6 @@
-# infra/namespaces/apps-public.yaml
 apiVersion: v1
 kind: Namespace
 metadata:
   name: apps-public
   labels:
     istio-injection: enabled
-    name: apps-public
-    # NetworkPolicy: Allow Public Ingress

@@ -1,7 +1,10 @@
 replicaCount: 1
+
 image:
   repository: us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo/cart-service
   tag: latest
+  pullPolicy: IfNotPresent
+
 service:
   type: ClusterIP
   port: 8080
@@ -20,36 +23,32 @@ autoscaling:
   maxReplicas: 10
   targetCPUUtilizationPercentage: 80
 
-podDisruptionBudget:
-  enabled: true
-  minAvailable: 1
-
 securityContext:
   runAsUser: 1000
   runAsNonRoot: true
   readOnlyRootFilesystem: true
 
-# Probes
 livenessProbe:
   httpGet:
     path: /health
-    port: 8080
+    port: http
   initialDelaySeconds: 15
   periodSeconds: 20
 
 readinessProbe:
   httpGet:
     path: /health
-    port: 8080
+    port: http
   initialDelaySeconds: 5
   periodSeconds: 10
 
-# Secrets
-envSecrets:
-  POSTGRES_DSN:
-    name: "cart-service-secrets"
-    key: "postgres-dsn"
-
 env:
-  REDIS_ADDR: redis-master.data-postgres.svc.cluster.local:6379
-  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.platform-observability.svc.cluster.local:4317
+  REDIS_ADDR: redis-master.data.svc.cluster.local:6379
+  KAFKA_BROKERS: ecommerce-cluster-kafka-bootstrap.data-kafka.svc.cluster.local:9092
+  ENV: prod
+  SERVICE_NAME: cart-service
+
+envSecrets:
+  OTEL_EXPORTER_OTLP_ENDPOINT:
+    name: cart-service-secrets
+    key: OTEL_EXPORTER_OTLP_ENDPOINT

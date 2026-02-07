@@ -1,15 +1,96 @@
-# infra/kafka/operator/strimzi-install.yaml
-# Downloads and installs the Strimzi Operator (v0.40.0)
-# Command: kubectl create -f 'https://strimzi.io/install/latest?namespace=kafka' -n kafka
-
-apiVersion: subscription.operators.coreos.com/v1alpha1
-kind: Subscription
+apiVersion: v1
+kind: ServiceAccount
 metadata:
-  name: strimzi-kafka-operator
-  namespace: kafka
+  name: strimzi-cluster-operator
+  namespace: data-kafka
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: strimzi-cluster-operator
+rules:
+  # Strimzi CRDs
+  - apiGroups: ["kafka.strimzi.io"]
+    resources:
+      - kafkas
+      - kafkanodepools
+      - kafkatopics
+      - kafkaconnects
+      - kafkabridges
+    verbs: ["*"]
+
+  # Core K8s resources
+  - apiGroups: [""]
+    resources:
+      - pods
+      - services
+      - endpoints
+      - configmaps
+      - secrets
+      - persistentvolumeclaims
+      - events
+    verbs: ["*"]
+
+  # Workloads
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - statefulsets
+      - replicasets
+    verbs: ["*"]
+
+  # Coordination / leader election
+  - apiGroups: ["coordination.k8s.io"]
+    resources:
+      - leases
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: strimzi-cluster-operator
+subjects:
+  - kind: ServiceAccount
+    name: strimzi-cluster-operator
+    namespace: data-kafka
+roleRef:
+  kind: ClusterRole
+  name: strimzi-cluster-operator
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: strimzi-cluster-operator
+  namespace: data-kafka
+  labels:
+    app: strimzi-cluster-operator
 spec:
-  channel: stable
-  name: strimzi-kafka-operator
-  source: operatorhubio-catalog
-  sourceNamespace: olm
-  installPlanApproval: Automatic
+  replicas: 1
+  selector:
+    matchLabels:
+      app: strimzi-cluster-operator
+  template:
+    metadata:
+      labels:
+        app: strimzi-cluster-operator
+    spec:
+      serviceAccountName: strimzi-cluster-operator
+      containers:
+        - name: strimzi-cluster-operator
+          image: quay.io/strimzi/operator:0.40.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: STRIMZI_NAMESPACE
+              value: "*"
+            - name: STRIMZI_FULL_RECONCILIATION_INTERVAL_MS
+              value: "120000"
+            - name: STRIMZI_OPERATION_TIMEOUT_MS
+              value: "300000"
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1
+              memory: 1Gi

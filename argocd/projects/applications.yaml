@@ -5,17 +5,21 @@ metadata:
   namespace: platform-argocd
 spec:
   description: "Microservices"
+
   sourceRepos:
-  - '*'
+    - "*"
+
   destinations:
-  - namespace: 'apps-*'
-    server: https://kubernetes.default.svc
-  # STRICT: Apps cannot touch cluster resources, only namespaced ones
-  clusterResourceWhitelist: [] 
+    - namespace: "apps-*"
+      server: https://kubernetes.default.svc
+
+  # STRICT: Apps cannot touch cluster-scoped resources
+  clusterResourceWhitelist: []
+
   namespaceResourceBlacklist:
-  - group: ''
-    kind: ResourceQuota
-  - group: ''
-    kind: LimitRange
-  - group: 'networking.k8s.io'
-    kind: NetworkPolicy
+    - group: ""
+      kind: ResourceQuota
+    - group: ""
+      kind: LimitRange
+    - group: networking.k8s.io
+      kind: NetworkPolicy

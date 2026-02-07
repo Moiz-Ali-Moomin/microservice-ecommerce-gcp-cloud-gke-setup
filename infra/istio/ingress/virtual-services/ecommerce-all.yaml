@@ -1,0 +1,197 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: ecommerce-all
+  namespace: ecommerce
+spec:
+  hosts:
+    - "*"
+  gateways:
+    - istio-system/ecom-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /admin-backoffice
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: admin-backoffice-service.ecommerce.svc.cluster.local
+            port:
+              number: 8080
+
+    - match:
+        - uri:
+            prefix: /analytics-ingest
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: analytics-ingest-service.ecommerce.svc.cluster.local
+            port:
+              number: 8080
+
+    - match:
+        - uri:
+            prefix: /api-gateway
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: api-gateway.ecommerce.svc.cluster.local
+            port:
+              number: 8080
+
+    - match:
+        - uri:
+            prefix: /attribution
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: attribution-service.ecommerce.svc.cluster.local
+            port:
+              number: 8080
+
+    - match:
+        - uri:
+            prefix: /audit
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: audit-service.ecommerce.svc.cluster.local
+            port:
+              number: 8080
+
+    - match:
+        - uri:
+            prefix: /auth
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: auth-service.ecommerce.svc.cluster.local
+            port:
+              number: 8080
+
+    - match:
+        - uri:
+            prefix: /cart
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: cart-service.ecommerce.svc.cluster.local
+            port:
+              number: 8080
+
+    - match:
+        - uri:
+            prefix: /conversation-webhook
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: conversation-webhook.ecommerce.svc.cluster.local
+            port:
+              number: 8080
+
+    - match:
+        - uri:
+            prefix: /feature-flag
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: feature-flag-service.ecommerce.svc.cluster.local
+            port:
+              number: 8080
+
+    - match:
+        - uri:
+            prefix: /landing
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: landing-service.ecommerce.svc.cluster.local
+            port:
+              number: 8080
+
+    - match:
+        - uri:
+            prefix: /notification
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: notification-service.ecommerce.svc.cluster.local
+            port:
+              number: 8080
+
+    - match:
+        - uri:
+            prefix: /offer
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: offer-service.ecommerce.svc.cluster.local
+            port:
+              number: 8080
+
+    - match:
+        - uri:
+            prefix: /product
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: product-service.ecommerce.svc.cluster.local
+            port:
+              number: 8080
+
+    - match:
+        - uri:
+            prefix: /redirect
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: redirect-service.ecommerce.svc.cluster.local
+            port:
+              number: 8080
+
+    - match:
+        - uri:
+            prefix: /reporting
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: reporting-service.ecommerce.svc.cluster.local
+            port:
+              number: 8080
+
+    - match:
+        - uri:
+            prefix: /storefront
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: storefront-service.ecommerce.svc.cluster.local
+            port:
+              number: 8080
+
+    - match:
+        - uri:
+            prefix: /user
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: user-service.ecommerce.svc.cluster.local
+            port:
+              number: 8080

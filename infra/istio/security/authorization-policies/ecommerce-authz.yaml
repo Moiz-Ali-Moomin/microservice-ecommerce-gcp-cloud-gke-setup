@@ -1,63 +1,17 @@
-# infra/istio/auth-policies/deny-all-default.yaml
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
 metadata:
-  name: deny-all
-  namespace: ecommerce
-spec:
-  {} # Deny all by default, explicit allow required
-
----
-# infra/istio/auth-policies/allow-ingress.yaml
-apiVersion: security.istio.io/v1beta1
-kind: AuthorizationPolicy
-metadata:
-  name: allow-ingress
-  namespace: ecommerce
-spec:
-  action: ALLOW
-  # Applies to ALL workloads in namespace if no selector is present.
-  # This allows the Gateway to talk to any service.
-  rules:
-  - from:
-    - source:
-        principals: ["cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"]
-    to:
-    - operation:
-        methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
-
----
-# infra/istio/auth-policies/allow-internal.yaml
-apiVersion: security.istio.io/v1beta1
-kind: AuthorizationPolicy
-metadata:
-  name: allow-internal
+  name: ecommerce-authz
   namespace: ecommerce
 spec:
   action: ALLOW
   rules:
-  - from:
-    - source:
-        namespaces: ["ecommerce"]
-    to:
-    - operation:
-        # Internal traffic can use any method / path
-        methods: ["*"]
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"
 
----
-# infra/istio/auth-policies/allow-monitoring.yaml
-apiVersion: security.istio.io/v1beta1
-kind: AuthorizationPolicy
-metadata:
-  name: allow-monitoring
-  namespace: ecommerce
-spec:
-  action: ALLOW
-  rules:
-  - from:
-    - source:
-        namespaces: ["observability", "istio-system"]
-    to:
-    - operation:
-        methods: ["GET"]
-        paths: ["/metrics", "/health"]
+    - from:
+        - source:
+            namespaces:
+              - ecommerce

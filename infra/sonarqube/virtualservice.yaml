@@ -1,16 +1,16 @@
-apiVersion: networking.istio.io/v1
+apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
   name: sonarqube
-  namespace: sonarqube
+  namespace: tooling-sonarqube
 spec:
   hosts:
-  - "sonar.internal.example.com"
+    - "sonar.internal.example.com"
   gateways:
-  - istio-system/ecom-gateway
+    - istio-system/ecom-gateway
   http:
-  - route:
-    - destination:
-        host: sonarqube-sonarqube.sonarqube.svc.cluster.local
-        port:
-          number: 9000
+    - route:
+        - destination:
+            host: sonarqube-sonarqube.tooling-sonarqube.svc.cluster.local
+            port:
+              number: 9000

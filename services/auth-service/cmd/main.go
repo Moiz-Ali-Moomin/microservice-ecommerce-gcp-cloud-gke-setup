@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -9,18 +10,19 @@ import (
 	"strings"
 	"time"
 
-	"sync"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/event"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/logger"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/tracing"
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
-	"go.uber.org/zap"
 )
 
 var (
-	jwtKey = []byte("my_secret_key")
+	jwtKey []byte
 )
 
 type Credentials struct {
@@ -35,19 +37,17 @@ type Claims struct {
 }
 
 type Handler struct {
-	userStore  map[string]string
-	storeMutex *sync.RWMutex
-	producer   *event.Producer
+	db       *sql.DB
+	redis    *redis.Client
+	producer *event.Producer
 }
 
-func NewHandler(p *event.Producer) *Handler {
-	return &Handler{
-		userStore: map[string]string{
-			"admin": "password",
-		},
-		storeMutex: &sync.RWMutex{},
-		producer:   p,
+func mustEnv(key string) string {
+	val := os.Getenv(key)
+	if val == "" {
+		log.Fatalf("Missing required env var: %s", key)
 	}
+	return val
 }
 
 func main() {
@@ -59,63 +59,103 @@ func main() {
 	}
 	defer func() { _ = tp.Shutdown(context.Background()) }()
 
-	// Init Producer
-	brokers := strings.Split(os.Getenv("KAFKA_BROKERS"), ",")
-	if len(brokers) == 0 || brokers[0] == "" {
-		brokers = []string{"kafka:9092"}
-	}
-	producer, err := event.NewProducer(brokers, "auth-service")
-	if err != nil {
-		logger.Log.Fatal("Failed to create kafka producer", zap.Error(err))
-	}
-	defer producer.Close()
+	// JWT
+	jwtKey = []byte(mustEnv("JWT_SECRET"))
 
-	h := NewHandler(producer)
+	// PostgreSQL
+	dsn := "postgres://" +
+		mustEnv("DB_USER") + ":" +
+		mustEnv("DB_PASSWORD") + "@" +
+		mustEnv("DB_HOST") + ":" +
+		mustEnv("DB_PORT") + "/" +
+		mustEnv("DB_NAME") +
+		"?sslmode=disable"
+
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		logger.Log.Fatal("Failed to connect to Postgres", zap.Error(err))
+	}
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(10)
+	db.SetConnMaxLifetime(30 * time.Minute)
+
+	// Redis
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     mustEnv("REDIS_HOST") + ":" + mustEnv("REDIS_PORT"),
+		Password: mustEnv("REDIS_PASSWORD"),
+		DB:       0,
+	})
+
+	// Kafka (OPTIONAL)
+	var producer *event.Producer
+	brokers := strings.Split(os.Getenv("KAFKA_BROKERS"), ",")
+	if len(brokers) > 0 && brokers[0] != "" {
+		p, err := event.NewProducer(brokers, "auth-service")
+		if err != nil {
+			logger.Log.Warn("Kafka unavailable, continuing without events", zap.Error(err))
+		} else {
+			producer = p
+			defer producer.Close()
+		}
+	}
+
+	h := &Handler{
+		db:       db,
+		redis:    redisClient,
+		producer: producer,
+	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	})
-	mux.HandleFunc("/login", h.Login)
+	mux.HandleFunc("/health", healthHandler)
+	mux.HandleFunc("/ready", h.readyHandler)
 	mux.HandleFunc("/signup", h.Signup)
+	mux.HandleFunc("/login", h.Login)
 	mux.HandleFunc("/validate", h.Validate)
 
-	logger.Log.Info("Starting auth-service on :8080")
-	if err := http.ListenAndServe(":8080", mux); err != nil {
-		log.Fatalf("Server failed: %v", err)
+	logger.Log.Info("Auth service running on :8080")
+	log.Fatal(http.ListenAndServe(":8080", mux))
+}
+
+func healthHandler(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+}
+
+func (h *Handler) readyHandler(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+
+	if err := h.db.PingContext(ctx); err != nil {
+		http.Error(w, "DB not ready", http.StatusServiceUnavailable)
+		return
 	}
+
+	if err := h.redis.Ping(ctx).Err(); err != nil {
+		http.Error(w, "Redis not ready", http.StatusServiceUnavailable)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 	var creds Credentials
 	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		http.Error(w, "Invalid payload", http.StatusBadRequest)
 		return
 	}
 
-	h.storeMutex.Lock()
-	if _, exists := h.userStore[creds.Username]; exists {
-		h.storeMutex.Unlock()
+	_, err := h.db.Exec(
+		`INSERT INTO users (username, password) VALUES ($1, crypt($2, gen_salt('bf')))`,
+		creds.Username,
+		creds.Password,
+	)
+	if err != nil {
 		http.Error(w, "User already exists", http.StatusConflict)
 		return
 	}
-	h.userStore[creds.Username] = creds.Password
-	h.storeMutex.Unlock()
 
-	// Emit user.signup
-	evt := event.Event{
-		EventID:   uuid.New().String(),
-		Timestamp: time.Now(),
-		Service:   "auth-service",
-		Metadata: map[string]interface{}{
-			"username": creds.Username,
-			"action":   "signup",
-		},
-	}
-	if err := h.producer.Emit(r.Context(), "user.signup", creds.Username, evt); err != nil {
-		logger.Log.Error("Failed to emit signup event", zap.Error(err))
-	}
+	h.emitEvent(r.Context(), "user.signup", creds.Username)
 
 	w.WriteHeader(http.StatusCreated)
 }
@@ -123,67 +163,71 @@ func (h *Handler) Signup(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var creds Credentials
 	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		http.Error(w, "Invalid payload", http.StatusBadRequest)
 		return
 	}
 
-	h.storeMutex.RLock()
-	expectedPassword, ok := h.userStore[creds.Username]
-	h.storeMutex.RUnlock()
+	var exists bool
+	err := h.db.QueryRow(
+		`SELECT true FROM users WHERE username=$1 AND password = crypt($2, password)`,
+		creds.Username,
+		creds.Password,
+	).Scan(&exists)
 
-	if !ok || expectedPassword != creds.Password {
-		w.WriteHeader(http.StatusUnauthorized)
+	if err != nil || !exists {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	expirationTime := time.Now().Add(60 * time.Minute)
+	exp := time.Now().Add(1 * time.Hour)
 	claims := &Claims{
 		Username: creds.Username,
 		Role:     "user",
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			ID:        uuid.New().String(),
+			ExpiresAt: jwt.NewNumericDate(exp),
 		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(jwtKey)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	tokenStr, _ := token.SignedString(jwtKey)
 
-	// Emit user.login
-	evt := event.Event{
-		EventID:   uuid.New().String(),
-		Timestamp: time.Now(),
-		Service:   "auth-service",
-		Metadata: map[string]interface{}{
-			"username": creds.Username,
-			"action":   "login",
-		},
-	}
-	if err := h.producer.Emit(r.Context(), "user.login", creds.Username, evt); err != nil {
-		logger.Log.Error("Failed to emit login event", zap.Error(err))
-	}
+	h.emitEvent(r.Context(), "user.login", creds.Username)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"token": tokenString, "username": creds.Username})
+	json.NewEncoder(w).Encode(map[string]string{
+		"token": tokenStr,
+	})
 }
 
 func (h *Handler) Validate(w http.ResponseWriter, r *http.Request) {
-	tokenStr := r.Header.Get("Authorization")
-	// Strip "Bearer " if present
-	if len(tokenStr) > 7 && tokenStr[:7] == "Bearer " {
-		tokenStr = tokenStr[7:]
-	}
+	tokenStr := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 
 	claims := &Claims{}
-	tkn, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
+	tkn, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
 		return jwtKey, nil
 	})
 	if err != nil || !tkn.Valid {
-		w.WriteHeader(http.StatusUnauthorized)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
+
+	// Redis blacklist check
+	ctx := r.Context()
+	blacklisted, err := h.redis.Get(ctx, "bl:"+claims.ID).Result()
+	if err == nil && blacklisted == "1" {
+		http.Error(w, "Token revoked", http.StatusUnauthorized)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Handler) emitEvent(ctx context.Context, topic, key string) {
+	if h.producer == nil {
+		return
+	}
+	_ = h.producer.Emit(ctx, topic, key, map[string]interface{}{
+		"id": uuid.New().String(),
+		"ts": time.Now(),
+	})
 }

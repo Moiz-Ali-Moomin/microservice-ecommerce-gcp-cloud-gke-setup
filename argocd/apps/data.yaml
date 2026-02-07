@@ -15,10 +15,10 @@ spec:
       recurse: true
   destination:
     server: https://kubernetes.default.svc
-    namespace: data-postgres # Default, though charts specify their own
+    namespace: data-postgres # Default; charts may override
   syncPolicy:
     automated:
-      prune: false # DANGEROUS for data
+      prune: false # ⚠️ correct choice for stateful data
       selfHeal: true
 ---
 apiVersion: argoproj.io/v1alpha1
@@ -50,7 +50,7 @@ metadata:
   name: data-kafka-topics
   namespace: platform-argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "6" # After Kafka Cluster (Wave 5)
+    argocd.argoproj.io/sync-wave: "6" # After Kafka cluster (wave 5)
 spec:
   project: data
   source:

@@ -11,16 +11,16 @@ import (
 )
 
 type CampaignStats struct {
-	CampaignID string  `json:"campaign_id"`
-	Clicks     int     `json:"clicks"`
-	Conversions int    `json:"conversions"`
-	Revenue    float64 `json:"revenue"`
-	ROI        float64 `json:"roi"`
+	CampaignID  string  `json:"campaign_id"`
+	Clicks      int     `json:"clicks"`
+	Conversions int     `json:"conversions"`
+	Revenue     float64 `json:"revenue"`
+	ROI         float64 `json:"roi"`
 }
 
 func main() {
 	logger.Init("reporting-service")
-	
+
 	tp, err := tracing.InitTracer("reporting-service")
 	if err != nil {
 		logger.Log.Fatal("Failed to init tracer", zap.Error(err))
@@ -50,4 +50,3 @@ func GetCampaignStats(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
 }
-
