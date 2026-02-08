@@ -1,6 +1,6 @@
 module github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/redirect-service
 
-go 1.24.0
+go 1.22.0
 
 replace github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib => ../shared-lib
 

@@ -1,6 +1,6 @@
 module github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib
 
-go 1.24.0
+go 1.22.0
 
 require (
 	github.com/IBM/sarama v1.46.3
