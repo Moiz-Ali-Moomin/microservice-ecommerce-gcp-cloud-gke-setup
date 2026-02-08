@@ -1,6 +1,6 @@
 module github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/product-service
 
-go 1.24.0
+go 1.22.0
 
 replace github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib => ../shared-lib
 
@@ -9,4 +9,7 @@ require (
 	go.uber.org/zap v1.27.1
 )
 
-require go.uber.org/multierr v1.10.0 // indirect
+require (
+	github.com/stretchr/testify v1.11.1 // indirect
+	go.uber.org/multierr v1.10.0 // indirect
+)

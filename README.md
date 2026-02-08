@@ -87,7 +87,7 @@ graph TD
 
 Ensure you have the following installed:
 
--   [Go 1.24+](https://go.dev/dl/)
+-   [Go 1.22+](https://go.dev/dl/)
 -   [Docker & Docker Compose](https://www.docker.com/)
 -   [Terraform 1.6+](https://developer.hashicorp.com/terraform/install)
 -   [kubectl](https://kubernetes.io/docs/tasks/tools/)
