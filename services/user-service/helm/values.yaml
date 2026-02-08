@@ -18,7 +18,9 @@ service:
   type: ClusterIP
   port: 8080
 
-env: {}
+env:
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.platform-observability.svc.cluster.local:4317"
+  OTEL_SERVICE_NAME: "user-service"
 
 resources:
   requests:

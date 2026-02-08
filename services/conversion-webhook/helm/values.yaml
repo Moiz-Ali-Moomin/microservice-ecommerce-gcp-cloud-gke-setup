@@ -20,9 +20,13 @@ service:
 
 env:
   KAFKA_BROKERS: "kafka-bootstrap.kafka.svc.cluster.local:9092"
-  CLICKBANK_SECRET_KEY: "change_me_in_prod"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.platform-observability.svc.cluster.local:4317"
   OTEL_SERVICE_NAME: "conversion-webhook"
+
+envSecrets:
+  CLICKBANK_SECRET_KEY:
+    name: conversion-webhook-secrets
+    key: clickbank-secret-key
 
 resources:
   requests:

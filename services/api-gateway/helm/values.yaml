@@ -3,6 +3,10 @@ replicaCount: 1
 autoscaling:
   enabled: false
 
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
 global:
   image:
     registry: REGISTRY_REGION-docker.pkg.dev
@@ -20,11 +24,11 @@ service:
 
 env:
   KAFKA_BROKERS: "kafka-bootstrap.kafka.svc.cluster.local:9092"
-  AUTH_SERVICE_URL: "http://auth-service.components.svc.cluster.local:8080"
-  USER_SERVICE_URL: "http://user-service.components.svc.cluster.local:8080"
-  OFFER_SERVICE_URL: "http://offer-service.components.svc.cluster.local:8080"
-  CART_SERVICE_URL: "http://cart-service.components.svc.cluster.local:8080"
-  STOREFRONT_SERVICE_URL: "http://storefront-service.components.svc.cluster.local:3000"
+  AUTH_SERVICE_URL: "http://auth-service.apps-core.svc.cluster.local:8080"
+  USER_SERVICE_URL: "http://user-service.apps-core.svc.cluster.local:8080"
+  OFFER_SERVICE_URL: "http://offer-service.apps-core.svc.cluster.local:8080"
+  CART_SERVICE_URL: "http://cart-service.apps-core.svc.cluster.local:8080"
+  STOREFRONT_SERVICE_URL: "http://storefront-service.apps-public.svc.cluster.local:3000"
   REDIS_ADDR: "redis-master.data.svc.cluster.local:6379"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.platform-observability.svc.cluster.local:4317"
   OTEL_SERVICE_NAME: "api-gateway"

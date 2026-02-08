@@ -20,11 +20,10 @@ service:
 
 env:
   REDIS_ADDR: "redis-master.data.svc.cluster.local:6379"
-
-envSecrets:
-  OTEL_EXPORTER_OTLP_ENDPOINT:
-    name: cart-service-secrets
-    key: OTEL_EXPORTER_OTLP_ENDPOINT
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.platform-observability.svc.cluster.local:4317"
+  OTEL_SERVICE_NAME: "cart-service"
+  
+envSecrets: {}
 
 resources:
   requests:
