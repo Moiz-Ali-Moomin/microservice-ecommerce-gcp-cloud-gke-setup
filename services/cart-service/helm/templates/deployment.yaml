@@ -16,31 +16,23 @@ spec:
       labels:
         {{- include "cart-service.selectorLabels" . | nindent 8 }}
     spec:
+      {{- if .Values.serviceAccount.create }}
       serviceAccountName: {{ .Values.serviceAccount.name }}
-      securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
-
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ include "cart-service.image" . }}"
-          imagePullPolicy: "{{ .Values.image.pullPolicy }}"
-
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
-
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}
               protocol: TCP
-
-          {{- /* ---------- ENV (Kafka + Redis only) ---------- */}}
-          {{- if or .Values.env .Values.envSecrets }}
           env:
             {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}
             {{- end }}
-
+            {{- if .Values.envSecrets }}
             {{- range $key, $val := .Values.envSecrets }}
             - name: {{ $key }}
               valueFrom:
@@ -48,13 +40,22 @@ spec:
                   name: {{ $val.name }}
                   key: {{ $val.key }}
             {{- end }}
-          {{- end }}
-
+            {{- end }}
           livenessProbe:
-            {{- toYaml .Values.livenessProbe | nindent 12 }}
-
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
           readinessProbe:
-            {{- toYaml .Values.readinessProbe | nindent 12 }}
-
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

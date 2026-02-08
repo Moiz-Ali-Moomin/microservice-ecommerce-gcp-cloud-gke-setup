@@ -9,8 +9,4 @@ provider "google-beta" {
   region  = var.region
 }
 
-resource "google_container_cluster" "primary" {
-  provider = google
 
-  # stable features
-}

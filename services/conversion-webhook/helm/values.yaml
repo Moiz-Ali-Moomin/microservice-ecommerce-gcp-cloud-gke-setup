@@ -1,8 +1,9 @@
 replicaCount: 1
 
+autoscaling:
+  enabled: false
+
 global:
-  gcp:
-    projectId: ecommerce-microservice-53
   image:
     registry: us-central1-docker.pkg.dev
     project: ecommerce-microservice-53
@@ -11,6 +12,7 @@ global:
 image:
   name: conversion-webhook
   tag: "latest"
+  pullPolicy: IfNotPresent
 
 service:
   type: ClusterIP

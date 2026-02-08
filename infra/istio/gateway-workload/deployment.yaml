@@ -12,51 +12,57 @@ spec:
     matchLabels:
       app: istio-ingressgateway
       istio: ingressgateway
+
   strategy:
     rollingUpdate:
       maxSurge: 100%
       maxUnavailable: 25%
+
   template:
     metadata:
-      annotations:
-        sidecar.istio.io/inject: "false"
       labels:
         app: istio-ingressgateway
         istio: ingressgateway
+      annotations:
+        sidecar.istio.io/inject: "false"
+
     spec:
       serviceAccountName: istio-ingressgateway-service-account
+
       securityContext:
-        fsGroup: 1337
+        runAsNonRoot: true
         runAsUser: 1337
         runAsGroup: 1337
-        runAsNonRoot: true
+        fsGroup: 1337
+
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                - key: app
-                  operator: In
-                  values:
-                  - istio-ingressgateway
-              topologyKey: kubernetes.io/hostname
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - istio-ingressgateway
+
       containers:
         - name: istio-proxy
           image: istio/proxyv2:1.25.2
           imagePullPolicy: IfNotPresent
+
           ports:
-            - containerPort: 8080
-              protocol: TCP
-            - containerPort: 8443
-              protocol: TCP
-            - containerPort: 15021
-              protocol: TCP
-              name: status-port
-            - containerPort: 15090
-              protocol: TCP
-              name: http-envoy-prom
+            - name: http2
+              containerPort: 8080
+            - name: https
+              containerPort: 8443
+            - name: status-port
+              containerPort: 15021
+            - name: http-envoy-prom
+              containerPort: 15090
+
           args:
             - proxy
             - router
@@ -65,6 +71,7 @@ spec:
             - --proxyLogLevel=warning
             - --proxyComponentLogLevel=misc:error
             - --log_output_level=default:info
+
           env:
             - name: JWT_POLICY
               value: third-party-jwt
@@ -75,27 +82,22 @@ spec:
             - name: POD_NAME
               valueFrom:
                 fieldRef:
-                  apiVersion: v1
                   fieldPath: metadata.name
             - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:
-                  apiVersion: v1
                   fieldPath: metadata.namespace
             - name: INSTANCE_IP
               valueFrom:
                 fieldRef:
-                  apiVersion: v1
                   fieldPath: status.podIP
             - name: SERVICE_ACCOUNT
               valueFrom:
                 fieldRef:
-                  apiVersion: v1
                   fieldPath: spec.serviceAccountName
             - name: HOST_IP
               valueFrom:
                 fieldRef:
-                  apiVersion: v1
                   fieldPath: status.hostIP
             - name: ISTIO_META_WORKLOAD_NAME
               value: istio-ingressgateway
@@ -105,6 +107,7 @@ spec:
               value: cluster.local
             - name: TRUST_DOMAIN
               value: cluster.local
+
           resources:
             requests:
               cpu: 100m
@@ -112,206 +115,60 @@ spec:
             limits:
               cpu: 2000m
               memory: 1024Mi
+
           readinessProbe:
-            failureThreshold: 30
             httpGet:
               path: /healthz/ready
               port: 15021
-              scheme: HTTP
             initialDelaySeconds: 1
             periodSeconds: 2
-            successThreshold: 1
             timeoutSeconds: 1
+            successThreshold: 1
+            failureThreshold: 30
+
           volumeMounts:
-            - mountPath: /var/run/secrets/istio
-              name: istiod-ca-cert
-            - mountPath: /var/run/secrets/tokens
-              name: istio-token
-            - mountPath: /etc/istio/pod
-              name: podinfo
-            - mountPath: /etc/istio/ingressgateway-certs
-              name: ingressgateway-certs
+            - name: istiod-ca-cert
+              mountPath: /var/run/secrets/istio
+            - name: istio-token
+              mountPath: /var/run/secrets/tokens
+            - name: podinfo
+              mountPath: /etc/istio/pod
+            - name: ingressgateway-certs
+              mountPath: /etc/istio/ingressgateway-certs
               readOnly: true
-            - mountPath: /etc/istio/ingressgateway-ca-certs
-              name: ingressgateway-ca-certs
+            - name: ingressgateway-ca-certs
+              mountPath: /etc/istio/ingressgateway-ca-certs
               readOnly: true
+
       volumes:
         - name: istiod-ca-cert
           configMap:
-            defaultMode: 420
             name: istio-ca-root-cert
+
         - name: podinfo
           downwardAPI:
-            defaultMode: 420
             items:
-              - fieldRef:
-                  apiVersion: v1
+              - path: labels
+                fieldRef:
                   fieldPath: metadata.labels
-                path: labels
-              - fieldRef:
-                  apiVersion: v1
+              - path: annotations
+                fieldRef:
                   fieldPath: metadata.annotations
-                path: annotations
+
         - name: istio-token
           projected:
-            defaultMode: 420
             sources:
               - serviceAccountToken:
                   audience: istio-ca
                   expirationSeconds: 43200
                   path: istio-token
+
         - name: ingressgateway-certs
           secret:
-            defaultMode: 420
-            optional: true
             secretName: istio-ingressgateway-certs
+            optional: true
+
         - name: ingressgateway-ca-certs
           secret:
-            defaultMode: 420
-            optional: true
-            secretName: istio-ingressgateway-ca-certsmetadata:  name: istio-ingressgateway  namespace: istio-system  labels:    app: istio-ingressgateway    istio: ingressgatewayspec:  replicas: 2  selector:    matchLabels:      app: istio-ingressgateway      istio: ingressgateway  strategy:    rollingUpdate:      maxSurge: 100%      maxUnavailable: 25%  template:    metadata:      annotations:        sidecar.istio.io/inject: "false"      labels:        app: istio-ingressgateway        istio: ingressgateway    spec:      serviceAccountName: istio-ingressgateway-service-account
-      securityContext:
-        fsGroup: 1337
-        runAsUser: 1337
-        runAsGroup: 1337
-        runAsNonRoot: true
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                - key: app
-                  operator: In
-                  values:
-                  - istio-ingressgateway
-              topologyKey: kubernetes.io/hostname
-      containers:
-        - name: istio-proxy
-          image: istio/proxyv2:1.25.2
-          imagePullPolicy: IfNotPresent
-          ports:
-            - containerPort: 8080
-              protocol: TCP
-            - containerPort: 8443
-              protocol: TCP
-            - containerPort: 15021
-              protocol: TCP
-              name: status-port
-            - containerPort: 15090
-              protocol: TCP
-              name: http-envoy-prom
-          args:
-            - proxy
-            - router
-            - --domain
-            - $(POD_NAMESPACE).svc.cluster.local
-            - --proxyLogLevel=warning
-            - --proxyComponentLogLevel=misc:error
-            - --log_output_level=default:info
-          env:
-            - name: JWT_POLICY
-              value: third-party-jwt
-            - name: PILOT_CERT_PROVIDER
-              value: istiod
-            - name: CA_ADDR
-              value: istiod.istio-system.svc:15012
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  apiVersion: v1
-                  fieldPath: metadata.name
-            - name: POD_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  apiVersion: v1
-                  fieldPath: metadata.namespace
-            - name: INSTANCE_IP
-              valueFrom:
-                fieldRef:
-                  apiVersion: v1
-                  fieldPath: status.podIP
-            - name: SERVICE_ACCOUNT
-              valueFrom:
-                fieldRef:
-                  apiVersion: v1
-                  fieldPath: spec.serviceAccountName
-            - name: HOST_IP
-              valueFrom:
-                fieldRef:
-                  apiVersion: v1
-                  fieldPath: status.hostIP
-            - name: ISTIO_META_WORKLOAD_NAME
-              value: istio-ingressgateway
-            - name: ISTIO_META_OWNER
-              value: kubernetes://apis/apps/v1/namespaces/istio-system/deployments/istio-ingressgateway
-            - name: ISTIO_META_MESH_ID
-              value: cluster.local
-            - name: TRUST_DOMAIN
-              value: cluster.local
-          resources:
-            requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: 2000m
-              memory: 1024Mi
-          readinessProbe:
-            failureThreshold: 30
-            httpGet:
-              path: /healthz/ready
-              port: 15021
-              scheme: HTTP
-            initialDelaySeconds: 1
-            periodSeconds: 2
-            successThreshold: 1
-            timeoutSeconds: 1
-          volumeMounts:
-            - mountPath: /var/run/secrets/istio
-              name: istiod-ca-cert
-            - mountPath: /var/run/secrets/tokens
-              name: istio-token
-            - mountPath: /etc/istio/pod
-              name: podinfo
-            - mountPath: /etc/istio/ingressgateway-certs
-              name: ingressgateway-certs
-              readOnly: true
-            - mountPath: /etc/istio/ingressgateway-ca-certs
-              name: ingressgateway-ca-certs
-              readOnly: true
-      volumes:
-        - name: istiod-ca-cert
-          configMap:
-            defaultMode: 420
-            name: istio-ca-root-cert
-        - name: podinfo
-          downwardAPI:
-            defaultMode: 420
-            items:
-              - fieldRef:
-                  apiVersion: v1
-                  fieldPath: metadata.labels
-                path: labels
-              - fieldRef:
-                  apiVersion: v1
-                  fieldPath: metadata.annotations
-                path: annotations
-        - name: istio-token
-          projected:
-            defaultMode: 420
-            sources:
-              - serviceAccountToken:
-                  audience: istio-ca
-                  expirationSeconds: 43200
-                  path: istio-token
-        - name: ingressgateway-certs
-          secret:
-            defaultMode: 420
-            optional: true
-            secretName: istio-ingressgateway-certs
-        - name: ingressgateway-ca-certs
-          secret:
-            defaultMode: 420
-            optional: true
             secretName: istio-ingressgateway-ca-certs
+            optional: true

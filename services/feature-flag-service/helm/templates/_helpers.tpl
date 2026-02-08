@@ -64,7 +64,5 @@ Construct full image reference
 Construct GCP Service Account Email
 */}}
 {{- define "feature-flag-service.serviceAccountEmail" -}}
-{{- $saName := .Values.serviceAccount.gcpServiceAccount -}}
-{{- $projectId := .Values.global.image.project | default .Values.global.gcp.projectId -}}
-{{- printf "%s@%s.iam.gserviceaccount.com" $saName $projectId -}}
+{{- .Values.serviceAccount.gcpServiceAccount -}}
 {{- end -}}

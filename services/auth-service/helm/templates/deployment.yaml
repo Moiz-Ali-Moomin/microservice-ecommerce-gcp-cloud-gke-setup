@@ -5,7 +5,9 @@ metadata:
   labels:
     {{- include "auth-service.labels" . | nindent 4 }}
 spec:
-  # REPLICAS REMOVED: Managed by HPA/VPA to avoid server-side apply conflicts
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "auth-service.selectorLabels" . | nindent 6 }}
@@ -14,29 +16,29 @@ spec:
       labels:
         {{- include "auth-service.selectorLabels" . | nindent 8 }}
     spec:
+      {{- if .Values.serviceAccount.create }}
       serviceAccountName: {{ .Values.serviceAccount.name }}
+      {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ include "auth-service.image" . }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
           ports:
             - name: http
-              containerPort: 8080
+              containerPort: {{ .Values.service.port }}
               protocol: TCP
           env:
-            {{- /* Static Environment Variables for Go App and Tracing */ -}}
             {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}
             {{- end }}
-            
-            {{- /* Secret Environment Variables (DB, Redis, JWT) */ -}}
             {{- if .Values.envSecrets }}
             {{- range $key, $val := .Values.envSecrets }}
             - name: {{ $key }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ $val.name | quote }}
-                  key: {{ $val.key | quote }}
+                  name: {{ $val.name }}
+                  key: {{ $val.key }}
             {{- end }}
             {{- end }}
           livenessProbe:
@@ -45,28 +47,15 @@ spec:
               port: http
             initialDelaySeconds: 10
             periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /health
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ include "auth-service.fullname" . }}
-  labels:
-    {{- include "auth-service.labels" . | nindent 4 }}
-spec:
-  type: {{ .Values.service.type }}
-  ports:
-    - port: {{ .Values.service.port }}
-      targetPort: http
-      protocol: TCP
-      name: http
-  selector:
-    {{- include "auth-service.selectorLabels" . | nindent 4 }}

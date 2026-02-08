@@ -54,5 +54,5 @@ resource "google_container_cluster" "primary" {
     enabled = true
   }
 
-  deletion_protection = false # set true in locked-down prod
+  deletion_protection = var.enable_deletion_protection
 }

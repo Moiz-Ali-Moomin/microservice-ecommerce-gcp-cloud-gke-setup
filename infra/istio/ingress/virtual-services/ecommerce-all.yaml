@@ -7,7 +7,7 @@ spec:
   hosts:
     - "*"
   gateways:
-    - istio-system/ecom-gateway
+    - istio-system/main-gateway
   http:
     - match:
         - uri:
@@ -193,5 +193,14 @@ spec:
       route:
         - destination:
             host: user-service.ecommerce.svc.cluster.local
+            port:
+              number: 8080
+
+    - match:
+        - uri:
+            prefix: /
+      route:
+        - destination:
+            host: storefront-service.ecommerce.svc.cluster.local
             port:
               number: 8080

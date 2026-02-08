@@ -4,6 +4,8 @@ resource "google_container_node_pool" "general" {
   cluster  = google_container_cluster.primary.name
   project  = var.project_id
 
+  node_locations = ["${var.region}-a", "${var.region}-b"]
+
   node_count = 1
 
   management {
@@ -76,7 +78,8 @@ resource "google_container_node_pool" "analytics" {
   node_config {
     machine_type = "n2-highmem-8"
 
-    # 🔥 Cost lever — turn ON if jobs are retry-safe
+    # Spot instances for cost optimization.
+    # Ensure workloads on this pool are tolerant of interruptions.
     spot = true
 
     disk_size_gb = 200
@@ -85,6 +88,8 @@ resource "google_container_node_pool" "analytics" {
     service_account = google_service_account.gke_nodes.email
     oauth_scopes    = ["https://www.googleapis.com/auth/cloud-platform"]
 
+    # Taint to ensure only dedicated analytics workloads run here.
+    # Pods must tolerate this taint to be scheduled.
     taint {
       key    = "workload"
       value  = "analytics"
@@ -103,6 +108,7 @@ resource "google_container_node_pool" "analytics" {
     tags = ["gke-analytics"]
 
     labels = {
+      env      = "prod"
       team     = "data"
       workload = "analytics"
       pool     = "analytics"

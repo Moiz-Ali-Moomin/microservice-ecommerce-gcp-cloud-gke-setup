@@ -2,8 +2,10 @@ external-secrets:
   installCRDs: true
 
   serviceAccount:
-    create: false
+    create: true
     name: external-secrets-sa
+    annotations:
+      iam.gke.io/gcp-service-account: "secrets-reader@ecommerce-microservice-53.iam.gserviceaccount.com"
 
   webhook:
     create: true

@@ -6,12 +6,16 @@ metadata:
 spec:
   action: ALLOW
   rules:
+    # 1️⃣ Allow ingress traffic from Istio Gateway
     - from:
         - source:
             principals:
               - "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"
 
+    # 2️⃣ Allow service-to-service traffic (explicit SAs only)
     - from:
         - source:
-            namespaces:
-              - ecommerce
+            principals:
+              - "cluster.local/ns/ecommerce/sa/cart-service"
+              - "cluster.local/ns/ecommerce/sa/order-service"
+              # add more service accounts here as needed
