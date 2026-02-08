@@ -5,13 +5,13 @@ autoscaling:
 
 global:
   image:
-    registry: us-central1-docker.pkg.dev
-    project: ecommerce-microservice-53
+    registry: REGISTRY_REGION-docker.pkg.dev
+    project: PROJECT_ID
     repository: ecommerce-repo
 
 image:
   name: auth-service
-  tag: "latest"
+  tag: "1.0.0"
   pullPolicy: IfNotPresent
 
 service:
@@ -57,5 +57,5 @@ resources:
 
 serviceAccount:
   create: true
-  name: auth-service-sa
-  gcpServiceAccount: auth-service@ecommerce-microservice-53.iam.gserviceaccount.com
+  name: auth-service
+  gcpServiceAccount: auth-service@PROJECT_ID.iam.gserviceaccount.com

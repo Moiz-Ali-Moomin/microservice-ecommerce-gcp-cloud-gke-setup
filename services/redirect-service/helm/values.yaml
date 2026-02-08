@@ -5,13 +5,13 @@ autoscaling:
 
 global:
   image:
-    registry: us-central1-docker.pkg.dev
-    project: ecommerce-microservice-53
+    registry: REGISTRY_REGION-docker.pkg.dev
+    project: PROJECT_ID
     repository: ecommerce-repo
 
 image:
   name: redirect-service
-  tag: "latest"
+  tag: "1.0.0"
   pullPolicy: IfNotPresent
 
 service:
@@ -33,5 +33,5 @@ resources:
 
 serviceAccount:
   create: true
-  name: redirect-service-sa
-  gcpServiceAccount: redirect-service@ecommerce-microservice-53.iam.gserviceaccount.com
+  name: redirect-service
+  gcpServiceAccount: redirect-service@PROJECT_ID.iam.gserviceaccount.com

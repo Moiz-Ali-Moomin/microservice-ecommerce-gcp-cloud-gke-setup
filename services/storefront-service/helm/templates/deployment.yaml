@@ -13,6 +13,8 @@ spec:
       {{- include "storefront-service.selectorLabels" . | nindent 6 }}
   template:
     metadata:
+      annotations:
+        sidecar.istio.io/inject: "true"
       labels:
         {{- include "storefront-service.selectorLabels" . | nindent 8 }}
     spec:
@@ -22,16 +24,17 @@ spec:
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ include "storefront-service.image" . }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}
-              protocol: TCP
+              protocol: TCP          {{- if or .Values.env .Values.envSecrets }}
           env:
             {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}
             {{- end }}
+          {{- end }}
           livenessProbe:
             httpGet:
               path: /health
