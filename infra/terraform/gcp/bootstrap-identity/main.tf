@@ -1,3 +1,15 @@
+locals {
+  required_services = [
+    "iam.googleapis.com",
+    "iamcredentials.googleapis.com",
+    "sts.googleapis.com",
+    "cloudresourcemanager.googleapis.com",
+    "secretmanager.googleapis.com",
+    "container.googleapis.com"
+  ]
+}
+
+
 data "google_project" "this" {
   project_id = var.project_id
 }

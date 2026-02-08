@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-otel-collector
+  namespace: platform-argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  project: platform
+  source:
+    repoURL: https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup
+    targetRevision: HEAD
+    path: infra/observability/otel-collector
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: platform-observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

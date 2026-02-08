@@ -1,13 +1,25 @@
 replicaCount: 1
+
+global:
+  gcp:
+    projectId: ecommerce-microservice-53
+  image:
+    registry: us-central1-docker.pkg.dev
+    project: ecommerce-microservice-53
+    repository: ecommerce-repo
+
 image:
-  repository: us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo/admin-backoffice-service
-  tag: latest
+  name: admin-backoffice-service
+  tag: "latest"
+
 service:
   type: ClusterIP
   port: 8080
+
 env:
-  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.platform-observability.svc.cluster.local:4317
-  OTEL_SERVICE_NAME: admin-backoffice-service
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.platform-observability.svc.cluster.local:4317"
+  OTEL_SERVICE_NAME: "admin-backoffice-service"
+
 resources:
   requests:
     cpu: 100m
@@ -16,22 +28,7 @@ resources:
     cpu: 500m
     memory: 256Mi
 
-autoscaling:
-  enabled: true
-  minReplicas: 1
-  maxReplicas: 5
-  targetCPUUtilizationPercentage: 80
-
-livenessProbe:
-  httpGet:
-    path: /health
-    port: 8080
-  initialDelaySeconds: 15
-  periodSeconds: 20
-
-readinessProbe:
-  httpGet:
-    path: /health
-    port: 8080
-  initialDelaySeconds: 5
-  periodSeconds: 10
+serviceAccount:
+  create: true
+  name: admin-backoffice-service-sa
+  gcpServiceAccount: admin-backoffice@ecommerce-microservice-53.iam.gserviceaccount.com

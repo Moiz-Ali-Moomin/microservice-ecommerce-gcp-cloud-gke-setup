@@ -22,3 +22,15 @@ variable "service_account_name" {
   type    = string
   default = "terraform-sa"
 }
+
+variable "k8s_namespace" {
+  description = "Kubernetes namespace for External Secrets Operator"
+  type        = string
+  default     = "ecommerce"
+}
+
+variable "k8s_sa_name" {
+  description = "Kubernetes Service Account name for External Secrets Operator"
+  type        = string
+  default     = "external-secrets-sa"
+}

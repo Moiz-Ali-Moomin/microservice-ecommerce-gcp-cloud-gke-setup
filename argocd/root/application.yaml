@@ -3,10 +3,12 @@ kind: Application
 metadata:
   name: root-app
   namespace: platform-argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
 spec:
   project: platform
   source:
-    repoURL: https://github.com/your-org/ecommerce-platform.git
+    repoURL: https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup
     targetRevision: HEAD
     path: argocd/apps
   destination:
@@ -16,3 +18,6 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true

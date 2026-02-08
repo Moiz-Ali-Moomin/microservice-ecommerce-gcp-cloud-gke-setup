@@ -1,32 +1,21 @@
 replicaCount: 1
 
+global:
+  gcp:
+    projectId: ecommerce-microservice-53
+  image:
+    registry: us-central1-docker.pkg.dev
+    project: ecommerce-microservice-53
+    repository: ecommerce-repo
+
 image:
-  repository: us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo/auth-service
-  tag: latest
+  name: auth-service
+  tag: "latest"
 
 service:
   type: ClusterIP
   port: 8080
 
-resources:
-  requests:
-    cpu: 250m
-    memory: 256Mi
-  limits:
-    cpu: 500m
-    memory: 512Mi
-
-autoscaling:
-  enabled: true
-  minReplicas: 2
-  maxReplicas: 10
-  targetCPUUtilizationPercentage: 80
-
-podDisruptionBudget:
-  enabled: true
-  minAvailable: 1
-
-# Non-secret env (Added the missing variables your Go code requires)
 env:
   # Infrastructure Hosts
   DB_HOST: "postgres-primary.data.svc.cluster.local"
@@ -40,9 +29,8 @@ env:
   OTEL_SERVICE_NAME: "auth-service"
 
   # Optional Kafka
-  KAFKA_BROKERS: ""
+  KAFKA_BROKERS: "kafka-bootstrap.kafka.svc.cluster.local:9092"
 
-# Secrets (Explicit mapping to your Go mustEnv calls)
 envSecrets:
   JWT_SECRET:
     name: auth-jwt-secret
@@ -56,3 +44,16 @@ envSecrets:
   REDIS_PASSWORD:
     name: auth-redis-secret
     key: REDIS_PASSWORD
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+serviceAccount:
+  create: true
+  name: auth-service-sa
+  gcpServiceAccount: auth-service@ecommerce-microservice-53.iam.gserviceaccount.com

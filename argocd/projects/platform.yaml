@@ -4,21 +4,27 @@ metadata:
   name: platform
   namespace: platform-argocd
 spec:
-  description: "Core Platform Infrastructure (Istio, Namespaces)"
-
+  description: "Core Platform Infrastructure (Istio, Namespaces, CRDs)"
   sourceRepos:
-    - "*"
-
+    - "https://github.com/your-org/ecommerce-platform.git"
   destinations:
     - namespace: istio-system
       server: https://kubernetes.default.svc
     - namespace: "platform-*"
       server: https://kubernetes.default.svc
     - namespace: "apps-*"
-      server: https://kubernetes.default.svc # manages namespaces
+      server: https://kubernetes.default.svc
     - namespace: "data-*"
       server: https://kubernetes.default.svc
-
+    - namespace: "tooling-*"
+      server: https://kubernetes.default.svc
+    - namespace: "sonarqube"
+      server: https://kubernetes.default.svc
+    - namespace: "kafka"
+      server: https://kubernetes.default.svc
   clusterResourceWhitelist:
     - group: "*"
-      kind: "*" # platform needs elevated privileges
+      kind: "*"
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

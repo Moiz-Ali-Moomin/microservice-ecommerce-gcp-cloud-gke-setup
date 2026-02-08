@@ -3,35 +3,41 @@ kind: Application
 metadata:
   name: data-databases
   namespace: platform-argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
   annotations:
     argocd.argoproj.io/sync-wave: "5"
 spec:
   project: data
   source:
-    repoURL: https://github.com/your-org/ecommerce-platform.git
+    repoURL: https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup
     targetRevision: HEAD
     path: infra/databases
     directory:
       recurse: true
   destination:
     server: https://kubernetes.default.svc
-    namespace: data-postgres # Default; charts may override
+    namespace: data-postgres
   syncPolicy:
     automated:
-      prune: false # ⚠️ correct choice for stateful data
+      prune: false 
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: data-kafka
   namespace: platform-argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
   annotations:
     argocd.argoproj.io/sync-wave: "5"
 spec:
   project: data
   source:
-    repoURL: https://github.com/your-org/ecommerce-platform.git
+    repoURL: https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup
     targetRevision: HEAD
     path: infra/kafka
     directory:
@@ -43,18 +49,22 @@ spec:
     automated:
       prune: false
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: data-kafka-topics
   namespace: platform-argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
   annotations:
-    argocd.argoproj.io/sync-wave: "6" # After Kafka cluster (wave 5)
+    argocd.argoproj.io/sync-wave: "6"
 spec:
   project: data
   source:
-    repoURL: https://github.com/your-org/ecommerce-platform.git
+    repoURL: https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup
     targetRevision: HEAD
     path: resources/kafka-topics
     directory:
@@ -66,3 +76,5 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

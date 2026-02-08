@@ -5,3 +5,8 @@ output "workload_identity_provider" {
 output "service_account_email" {
   value = google_service_account.terraform.email
 }
+
+output "secrets_reader_email" {
+  description = "Email of the Secrets Reader GCP Service Account"
+  value       = google_service_account.secrets_reader.email
+}

@@ -4,4 +4,6 @@ metadata:
   name: platform-argocd
   labels:
     name: platform-argocd
+    # Security: Ensure ArgoCD is protected
+    pod-security.kubernetes.io/enforce: restricted
     istio-injection: disabled

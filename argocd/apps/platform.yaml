@@ -3,33 +3,39 @@ kind: Application
 metadata:
   name: platform-infra
   namespace: platform-argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:
   project: platform
   source:
-    repoURL: https://github.com/your-org/ecommerce-platform.git
+    repoURL: https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup
     targetRevision: HEAD
     path: infra/namespaces
   destination:
     server: https://kubernetes.default.svc
-    namespace: default # context-only; namespaces create themselves
+    namespace: default # Manifests specify metadata.namespace
   syncPolicy:
     automated:
-      prune: false # 🚨 NEVER auto-delete namespaces
+      prune: false # Safety: Don't auto-delete namespaces if removed from git immediately
       selfHeal: true
+    syncOptions:
+      - ApplyOutOfSyncOnly=true
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: platform-istio
   namespace: platform-argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
   annotations:
     argocd.argoproj.io/sync-wave: "2"
 spec:
   project: platform
   source:
-    repoURL: https://github.com/your-org/ecommerce-platform.git
+    repoURL: https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup
     targetRevision: HEAD
     path: infra/istio
     directory:
@@ -41,3 +47,6 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true

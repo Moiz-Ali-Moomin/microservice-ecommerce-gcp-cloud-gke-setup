@@ -7,6 +7,6 @@ resources:
   - namespace.yaml
   - https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 
-# Patches can be added here for ingress/cm configuration
-patchesStrategicMerge:
-  - patch-argocd-cm.yaml
+# Patches for production hardening (if present)
+# patchesStrategicMerge:
+#   - patch-argocd-cm.yaml

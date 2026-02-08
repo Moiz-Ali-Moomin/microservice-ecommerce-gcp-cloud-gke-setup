@@ -16,9 +16,10 @@ spec:
       labels:
         {{- include "attribution-service.selectorLabels" . | nindent 8 }}
     spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: "{{ include "attribution-service.image" . }}"
           ports:
             - name: http
               containerPort: 8080

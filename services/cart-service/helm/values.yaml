@@ -1,13 +1,28 @@
 replicaCount: 1
 
+global:
+  gcp:
+    projectId: ecommerce-microservice-53
+  image:
+    registry: us-central1-docker.pkg.dev
+    project: ecommerce-microservice-53
+    repository: ecommerce-repo
+
 image:
-  repository: us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo/cart-service
-  tag: latest
-  pullPolicy: IfNotPresent
+  name: cart-service
+  tag: "latest"
 
 service:
   type: ClusterIP
   port: 8080
+
+env:
+  REDIS_ADDR: "redis-master.data.svc.cluster.local:6379"
+
+envSecrets:
+  OTEL_EXPORTER_OTLP_ENDPOINT:
+    name: cart-service-secrets
+    key: OTEL_EXPORTER_OTLP_ENDPOINT
 
 resources:
   requests:
@@ -17,38 +32,7 @@ resources:
     cpu: 500m
     memory: 512Mi
 
-autoscaling:
-  enabled: true
-  minReplicas: 2
-  maxReplicas: 10
-  targetCPUUtilizationPercentage: 80
-
-securityContext:
-  runAsUser: 1000
-  runAsNonRoot: true
-  readOnlyRootFilesystem: true
-
-livenessProbe:
-  httpGet:
-    path: /health
-    port: http
-  initialDelaySeconds: 15
-  periodSeconds: 20
-
-readinessProbe:
-  httpGet:
-    path: /health
-    port: http
-  initialDelaySeconds: 5
-  periodSeconds: 10
-
-env:
-  REDIS_ADDR: redis-master.data.svc.cluster.local:6379
-  KAFKA_BROKERS: ecommerce-cluster-kafka-bootstrap.data-kafka.svc.cluster.local:9092
-  ENV: prod
-  SERVICE_NAME: cart-service
-
-envSecrets:
-  OTEL_EXPORTER_OTLP_ENDPOINT:
-    name: cart-service-secrets
-    key: OTEL_EXPORTER_OTLP_ENDPOINT
+serviceAccount:
+  create: true
+  name: cart-service-sa
+  gcpServiceAccount: cart-service@ecommerce-microservice-53.iam.gserviceaccount.com

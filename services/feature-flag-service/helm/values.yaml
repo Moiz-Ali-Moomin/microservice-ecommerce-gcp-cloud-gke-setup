@@ -1,13 +1,25 @@
 replicaCount: 1
+
+global:
+  gcp:
+    projectId: ecommerce-microservice-53
+  image:
+    registry: us-central1-docker.pkg.dev
+    project: ecommerce-microservice-53
+    repository: ecommerce-repo
+
 image:
-  repository: us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo/feature-flag-service
-  tag: latest
+  name: feature-flag-service
+  tag: "latest"
+
 service:
   type: ClusterIP
   port: 8080
+
 env:
-  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.platform-observability.svc.cluster.local:4317
-  OTEL_SERVICE_NAME: feature-flag-service
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.platform-observability.svc.cluster.local:4317"
+  OTEL_SERVICE_NAME: "feature-flag-service"
+
 resources:
   requests:
     cpu: 50m
@@ -16,8 +28,7 @@ resources:
     cpu: 100m
     memory: 128Mi
 
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 10
-  targetCPUUtilizationPercentage: 80
+serviceAccount:
+  create: true
+  name: feature-flag-service-sa
+  gcpServiceAccount: feature-flag-service@ecommerce-microservice-53.iam.gserviceaccount.com

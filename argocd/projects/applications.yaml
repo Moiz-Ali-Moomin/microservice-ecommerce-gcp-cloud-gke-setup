@@ -5,17 +5,12 @@ metadata:
   namespace: platform-argocd
 spec:
   description: "Microservices"
-
   sourceRepos:
-    - "*"
-
+    - "https://github.com/your-org/ecommerce-platform.git"
   destinations:
     - namespace: "apps-*"
       server: https://kubernetes.default.svc
-
-  # STRICT: Apps cannot touch cluster-scoped resources
   clusterResourceWhitelist: []
-
   namespaceResourceBlacklist:
     - group: ""
       kind: ResourceQuota

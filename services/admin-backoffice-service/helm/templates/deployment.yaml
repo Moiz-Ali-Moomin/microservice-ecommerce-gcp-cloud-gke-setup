@@ -16,9 +16,10 @@ spec:
       labels:
         {{- include "admin-backoffice-service.selectorLabels" . | nindent 8 }}
     spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: "{{ include "admin-backoffice-service.image" . }}"
           ports:
             - name: http
               containerPort: 8080
@@ -36,7 +37,6 @@ spec:
             periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 3
-
           readinessProbe:
             httpGet:
               path: /health
@@ -45,7 +45,5 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
-
-
           resources:
             {{- toYaml .Values.resources | nindent 12 }}

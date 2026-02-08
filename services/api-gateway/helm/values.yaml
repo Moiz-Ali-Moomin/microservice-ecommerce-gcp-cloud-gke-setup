@@ -1,11 +1,36 @@
 replicaCount: 1
+
+global:
+  gcp:
+    projectId: ecommerce-microservice-53
+  image:
+    registry: us-central1-docker.pkg.dev
+    project: ecommerce-microservice-53
+    repository: ecommerce-repo
+
 image:
-  repository: us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo/api-gateway
-  tag: latest
-  pullPolicy: IfNotPresent
+  name: api-gateway
+  tag: "latest"
+
 service:
   type: ClusterIP
   port: 8080
+
+env:
+  KAFKA_BROKERS: "kafka-bootstrap.kafka.svc.cluster.local:9092"
+  AUTH_SERVICE_URL: "http://auth-service.components.svc.cluster.local:8080"
+  USER_SERVICE_URL: "http://user-service.components.svc.cluster.local:8080"
+  OFFER_SERVICE_URL: "http://offer-service.components.svc.cluster.local:8080"
+  CART_SERVICE_URL: "http://cart-service.components.svc.cluster.local:8080"
+  STOREFRONT_SERVICE_URL: "http://storefront-service.components.svc.cluster.local:3000"
+  REDIS_ADDR: "redis-master.data.svc.cluster.local:6379"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.platform-observability.svc.cluster.local:4317"
+  OTEL_SERVICE_NAME: "api-gateway"
+
+envSecrets:
+  POSTGRES_DSN:
+    name: "api-gateway-secrets"
+    key: "postgres-dsn"
 
 resources:
   requests:
@@ -15,33 +40,7 @@ resources:
     cpu: 500m
     memory: 512Mi
 
-# Autoscaling (HPA)
-autoscaling:
-  enabled: true
-  minReplicas: 2
-  maxReplicas: 10
-  targetCPUUtilizationPercentage: 70
-
-# Pod Disruption Budget
-podDisruptionBudget:
-  enabled: true
-  minAvailable: 1
-
-# Environment variables
-env:
-  KAFKA_BROKERS: kafka-bootstrap.kafka.svc.cluster.local:9092
-  AUTH_SERVICE_URL: http://auth-service.apps-core.svc.cluster.local:8080
-  USER_SERVICE_URL: http://user-service.apps-core.svc.cluster.local:8080
-  OFFER_SERVICE_URL: http://offer-service.apps-core.svc.cluster.local:8080
-  CART_SERVICE_URL: http://cart-service.apps-core.svc.cluster.local:8080
-  STOREFRONT_SERVICE_URL: http://storefront-service.apps-public.svc.cluster.local:8080
-  REDIS_ADDR: redis-master.default.svc.cluster.local:6379
-  # OTEL config should be here too
-  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.platform-observability.svc.cluster.local:4317
-  OTEL_SERVICE_NAME: api-gateway
-
-# Secrets config (to be used by updated deployment.yaml)
-envSecrets:
-  POSTGRES_DSN:
-    name: "api-gateway-secrets"
-    key: "postgres-dsn"
+serviceAccount:
+  create: true
+  name: api-gateway-sa
+  gcpServiceAccount: api-gateway@ecommerce-microservice-53.iam.gserviceaccount.com

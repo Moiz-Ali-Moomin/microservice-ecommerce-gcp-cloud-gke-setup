@@ -1,13 +1,15 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: { { include "attribution-service.fullname" . } }
-  labels: { { - include "attribution-service.labels" . | nindent 4 } }
+  name: {{ include "attribution-service.fullname" . }}
+  labels:
+    {{- include "attribution-service.labels" . | nindent 4 }}
 spec:
-  type: { { .Values.service.type } }
+  type: {{ .Values.service.type }}
   ports:
-    - port: { { .Values.service.port } }
+    - port: {{ .Values.service.port }}
       targetPort: http
       protocol: TCP
       name: http
-  selector: { { - include "attribution-service.selectorLabels" . | nindent 4 } }
+  selector:
+    {{- include "attribution-service.selectorLabels" . | nindent 4 }}

@@ -1,6 +1,6 @@
 terraform {
   backend "gcs" {
     bucket = "ecommerce-tf-state"
-    prefix = "platform/gcp"
+    prefix = "platform/gcp/gke"
   }
 }

@@ -14,9 +14,10 @@ spec:
       labels:
         app: product-service
     spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
       containers:
         - name: product-service
-          image: us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo/product-service:latest
+          image: "{{ include "product-service.image" . }}"
           ports:
             - containerPort: 8080
           livenessProbe:

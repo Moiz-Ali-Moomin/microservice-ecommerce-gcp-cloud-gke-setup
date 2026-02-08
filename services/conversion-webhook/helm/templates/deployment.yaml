@@ -16,9 +16,10 @@ spec:
       labels:
         {{- include "conversion-webhook.selectorLabels" . | nindent 8 }}
     spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: "{{ include "conversion-webhook.image" . }}"
           ports:
             - name: http
               containerPort: 8080

@@ -48,3 +48,23 @@ Chart name and version
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
+{{/*
+Construct full image reference
+*/}}
+{{- define "audit-service.image" -}}
+{{- $registry := .Values.global.image.registry | default .Values.image.registry -}}
+{{- $project := .Values.global.image.project | default .Values.image.project -}}
+{{- $repo := .Values.global.image.repository | default .Values.image.repository -}}
+{{- $name := .Values.image.name | default .Chart.Name -}}
+{{- $tag := .Values.image.tag | default .Chart.AppVersion | default "latest" -}}
+{{- printf "%s/%s/%s/%s:%s" $registry $project $repo $name $tag -}}
+{{- end -}}
+
+{{/*
+Construct GCP Service Account Email
+*/}}
+{{- define "audit-service.serviceAccountEmail" -}}
+{{- $saName := .Values.serviceAccount.gcpServiceAccount -}}
+{{- $projectId := .Values.global.image.project | default .Values.global.gcp.projectId -}}
+{{- printf "%s@%s.iam.gserviceaccount.com" $saName $projectId -}}
+{{- end -}}

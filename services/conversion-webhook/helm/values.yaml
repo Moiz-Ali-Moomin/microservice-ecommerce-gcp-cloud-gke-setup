@@ -1,15 +1,27 @@
 replicaCount: 1
+
+global:
+  gcp:
+    projectId: ecommerce-microservice-53
+  image:
+    registry: us-central1-docker.pkg.dev
+    project: ecommerce-microservice-53
+    repository: ecommerce-repo
+
 image:
-  repository: us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo/conversion-webhook
-  tag: latest
+  name: conversion-webhook
+  tag: "latest"
+
 service:
   type: ClusterIP
   port: 8080
+
 env:
   KAFKA_BROKERS: "kafka-bootstrap.kafka.svc.cluster.local:9092"
   CLICKBANK_SECRET_KEY: "change_me_in_prod"
-  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.platform-observability.svc.cluster.local:4317
-  OTEL_SERVICE_NAME: conversion-webhook
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.platform-observability.svc.cluster.local:4317"
+  OTEL_SERVICE_NAME: "conversion-webhook"
+
 resources:
   requests:
     cpu: 100m
@@ -18,8 +30,7 @@ resources:
     cpu: 200m
     memory: 256Mi
 
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 10
-  targetCPUUtilizationPercentage: 80
+serviceAccount:
+  create: true
+  name: conversion-webhook-sa
+  gcpServiceAccount: conversion-webhook@ecommerce-microservice-53.iam.gserviceaccount.com

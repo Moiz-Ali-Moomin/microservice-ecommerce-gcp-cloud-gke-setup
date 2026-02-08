@@ -16,13 +16,14 @@ spec:
       labels:
         {{- include "cart-service.selectorLabels" . | nindent 8 }}
     spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
 
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: "{{ include "cart-service.image" . }}"
+          imagePullPolicy: "{{ .Values.image.pullPolicy }}"
 
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}

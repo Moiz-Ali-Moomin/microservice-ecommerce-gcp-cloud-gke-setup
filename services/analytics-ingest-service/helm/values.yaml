@@ -1,6 +1,6 @@
 replicaCount: 1
 image:
-  repository: us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo/analytics-ingest-service
+  repository: ""
   tag: latest
 service:
   type: ClusterIP
@@ -20,3 +20,31 @@ autoscaling:
   minReplicas: 1
   maxReplicas: 10
   targetCPUUtilizationPercentage: 80
+
+# -------------------
+# GCP WORKLOAD IDENTITY
+# -------------------
+gcp:
+  projectId: "ecommerce-microservice-53"
+  serviceAccount:
+    name: analytics-ingest-service
+
+# -------------------
+# GLOBAL CONFIGURATION
+# -------------------
+global:
+  gcp:
+    projectId: "ecommerce-microservice-53"
+  image:
+    registry: "us-central1-docker.pkg.dev"
+    project: "ecommerce-microservice-53"
+    repository: "ecommerce-repo"
+
+image:
+  name: 'analytics-ingest-service'
+  tag: 'latest'
+
+serviceAccount:
+  create: true
+  name: 'analytics-ingest-service-sa'
+  gcpServiceAccount: 'analytics-ingest-service'
