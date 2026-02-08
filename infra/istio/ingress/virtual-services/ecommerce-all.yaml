@@ -16,7 +16,7 @@ spec:
         uri: /
       route:
         - destination:
-            host: admin-backoffice-service.ecommerce.svc.cluster.local
+            host: admin-backoffice-service.apps-core.svc.cluster.local
             port:
               number: 8080
 
@@ -27,7 +27,7 @@ spec:
         uri: /
       route:
         - destination:
-            host: analytics-ingest-service.ecommerce.svc.cluster.local
+            host: analytics-ingest-service.apps-async.svc.cluster.local
             port:
               number: 8080
 
@@ -38,7 +38,7 @@ spec:
         uri: /
       route:
         - destination:
-            host: api-gateway.ecommerce.svc.cluster.local
+            host: api-gateway.apps-public.svc.cluster.local
             port:
               number: 8080
 
@@ -49,7 +49,7 @@ spec:
         uri: /
       route:
         - destination:
-            host: attribution-service.ecommerce.svc.cluster.local
+            host: attribution-service.apps-async.svc.cluster.local
             port:
               number: 8080
 
@@ -60,7 +60,7 @@ spec:
         uri: /
       route:
         - destination:
-            host: audit-service.ecommerce.svc.cluster.local
+            host: audit-service.apps-async.svc.cluster.local
             port:
               number: 8080
 
@@ -71,7 +71,7 @@ spec:
         uri: /
       route:
         - destination:
-            host: auth-service.ecommerce.svc.cluster.local
+            host: auth-service.apps-core.svc.cluster.local
             port:
               number: 8080
 
@@ -82,18 +82,18 @@ spec:
         uri: /
       route:
         - destination:
-            host: cart-service.ecommerce.svc.cluster.local
+            host: cart-service.apps-core.svc.cluster.local
             port:
               number: 8080
 
     - match:
         - uri:
-            prefix: /conversation-webhook
+            prefix: /conversion-webhook
       rewrite:
         uri: /
       route:
         - destination:
-            host: conversation-webhook.ecommerce.svc.cluster.local
+            host: conversion-webhook.apps-public.svc.cluster.local
             port:
               number: 8080
 
@@ -104,7 +104,7 @@ spec:
         uri: /
       route:
         - destination:
-            host: feature-flag-service.ecommerce.svc.cluster.local
+            host: feature-flag-service.apps-core.svc.cluster.local
             port:
               number: 8080
 
@@ -115,7 +115,7 @@ spec:
         uri: /
       route:
         - destination:
-            host: landing-service.ecommerce.svc.cluster.local
+            host: landing-service.apps-public.svc.cluster.local
             port:
               number: 8080
 
@@ -126,7 +126,7 @@ spec:
         uri: /
       route:
         - destination:
-            host: notification-service.ecommerce.svc.cluster.local
+            host: notification-service.apps-async.svc.cluster.local
             port:
               number: 8080
 
@@ -137,7 +137,7 @@ spec:
         uri: /
       route:
         - destination:
-            host: offer-service.ecommerce.svc.cluster.local
+            host: offer-service.apps-core.svc.cluster.local
             port:
               number: 8080
 
@@ -148,7 +148,7 @@ spec:
         uri: /
       route:
         - destination:
-            host: product-service.ecommerce.svc.cluster.local
+            host: product-service.apps-core.svc.cluster.local
             port:
               number: 8080
 
@@ -159,7 +159,7 @@ spec:
         uri: /
       route:
         - destination:
-            host: redirect-service.ecommerce.svc.cluster.local
+            host: redirect-service.apps-public.svc.cluster.local
             port:
               number: 8080
 
@@ -170,7 +170,7 @@ spec:
         uri: /
       route:
         - destination:
-            host: reporting-service.ecommerce.svc.cluster.local
+            host: reporting-service.apps-core.svc.cluster.local
             port:
               number: 8080
 
@@ -181,7 +181,7 @@ spec:
         uri: /
       route:
         - destination:
-            host: storefront-service.ecommerce.svc.cluster.local
+            host: storefront-service.apps-public.svc.cluster.local
             port:
               number: 8080
 
@@ -192,7 +192,7 @@ spec:
         uri: /
       route:
         - destination:
-            host: user-service.ecommerce.svc.cluster.local
+            host: user-service.apps-core.svc.cluster.local
             port:
               number: 8080
 
@@ -201,6 +201,6 @@ spec:
             prefix: /
       route:
         - destination:
-            host: storefront-service.ecommerce.svc.cluster.local
+            host: storefront-service.apps-public.svc.cluster.local
             port:
               number: 8080

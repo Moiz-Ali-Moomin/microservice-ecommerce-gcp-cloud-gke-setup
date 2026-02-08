@@ -12,10 +12,7 @@ spec:
             principals:
               - "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"
 
-    # 2️⃣ Allow service-to-service traffic (explicit SAs only)
+    # 2️⃣ Allow service-to-service traffic (Namespace-based)
     - from:
         - source:
-            principals:
-              - "cluster.local/ns/ecommerce/sa/cart-service"
-              - "cluster.local/ns/ecommerce/sa/order-service"
-              # add more service accounts here as needed
+            namespaces: ["apps-core", "apps-public", "apps-async"]
