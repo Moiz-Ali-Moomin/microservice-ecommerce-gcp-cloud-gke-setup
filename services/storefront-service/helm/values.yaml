@@ -23,6 +23,7 @@ env:
   CART_SERVICE_URL: "http://cart-service.apps-core.svc.cluster.local:8080"
   OFFER_SERVICE_URL: "http://offer-service.apps-core.svc.cluster.local:8080"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.platform-observability.svc.cluster.local:4317"
+  OTEL_SERVICE_NAME: "storefront-service"
 
 resources:
   requests:

@@ -32,7 +32,7 @@ resource "google_container_cluster" "primary" {
   private_cluster_config {
     enable_private_nodes    = true
     enable_private_endpoint = false # true = fully private (VPN/Bastion needed)
-    master_ipv4_cidr_block  = "172.16.0.0/28"
+    master_ipv4_cidr_block  = var.master_ipv4_cidr_block
   }
 
   # Dataplane V2 (eBPF)
@@ -55,4 +55,8 @@ resource "google_container_cluster" "primary" {
   }
 
   deletion_protection = var.enable_deletion_protection
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }

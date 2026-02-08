@@ -14,8 +14,8 @@ resource "google_container_node_pool" "general" {
   }
 
   autoscaling {
-    min_node_count = 1
-    max_node_count = 5
+    min_node_count = var.general_min_count
+    max_node_count = var.general_max_count
   }
 
   upgrade_settings {
@@ -24,7 +24,7 @@ resource "google_container_node_pool" "general" {
   }
 
   node_config {
-    machine_type = "e2-standard-4"
+    machine_type = var.general_machine_type
     preemptible  = false
 
     disk_size_gb = 100
@@ -76,7 +76,7 @@ resource "google_container_node_pool" "analytics" {
   }
 
   node_config {
-    machine_type = "n2-highmem-8"
+    machine_type = var.analytics_machine_type
 
     # Spot instances for cost optimization.
     # Ensure workloads on this pool are tolerant of interruptions.

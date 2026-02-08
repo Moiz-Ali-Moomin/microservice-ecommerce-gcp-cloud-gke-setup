@@ -2,7 +2,7 @@ apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaTopic
 metadata:
   name: page.viewed
-  namespace: data-kafka
+  namespace: kafka
   labels:
     strimzi.io/cluster: ecommerce-cluster
     tier: events
@@ -19,7 +19,7 @@ apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaTopic
 metadata:
   name: cta.clicked
-  namespace: data-kafka
+  namespace: kafka
   labels:
     strimzi.io/cluster: ecommerce-cluster
     tier: events
@@ -36,7 +36,7 @@ apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaTopic
 metadata:
   name: checkout.completed
-  namespace: data-kafka
+  namespace: kafka
   labels:
     strimzi.io/cluster: ecommerce-cluster
     tier: business

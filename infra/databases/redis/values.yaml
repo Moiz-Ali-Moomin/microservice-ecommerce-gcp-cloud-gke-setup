@@ -79,7 +79,7 @@ metrics:
 
   serviceMonitor:
     enabled: true
-    namespace: monitoring
+    namespace: platform-observability
     interval: 30s
     scrapeTimeout: 10s
     labels:

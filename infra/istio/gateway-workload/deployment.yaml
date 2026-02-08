@@ -50,7 +50,7 @@ spec:
 
       containers:
         - name: istio-proxy
-          image: istio/proxyv2:1.25.2
+          image: istio/proxyv2:1.22.1
           imagePullPolicy: IfNotPresent
 
           ports:

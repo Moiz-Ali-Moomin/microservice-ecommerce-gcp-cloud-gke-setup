@@ -2,7 +2,7 @@ apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaNodePool
 metadata:
   name: broker-pool
-  namespace: data-kafka
+  namespace: kafka
   labels:
     strimzi.io/cluster: ecommerce-cluster
 spec:

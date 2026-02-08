@@ -7,7 +7,7 @@ spec:
   hosts:
     - "sonar.internal.example.com"
   gateways:
-    - istio-system/ecom-gateway
+    - istio-system/main-gateway
   http:
     - route:
         - destination:
