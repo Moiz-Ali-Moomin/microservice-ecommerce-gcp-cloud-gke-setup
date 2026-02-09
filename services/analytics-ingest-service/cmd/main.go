@@ -59,6 +59,11 @@ func main() {
 	// WaitGroup to track pending emissions
 	var wg sync.WaitGroup
 
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
 	http.HandleFunc("/ingest", func(w http.ResponseWriter, r *http.Request) {
 		var req IngestRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

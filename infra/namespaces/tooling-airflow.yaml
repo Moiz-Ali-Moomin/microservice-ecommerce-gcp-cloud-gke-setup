@@ -3,7 +3,7 @@ kind: Namespace
 metadata:
   name: tooling-airflow
   labels:
-    istio-injection: disabled
-    pod-security.kubernetes.io/enforce: baseline
-    pod-security.kubernetes.io/audit: baseline
-    pod-security.kubernetes.io/warn: baseline
+    # REQUIRED: Airflow init containers need elevated privileges
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: privileged
+    pod-security.kubernetes.io/audit: privileged

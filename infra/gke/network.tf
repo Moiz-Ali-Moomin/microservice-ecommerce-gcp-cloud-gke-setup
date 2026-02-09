@@ -3,7 +3,7 @@ resource "google_compute_network" "gke_network" {
   auto_create_subnetworks = false
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 }
 
@@ -30,6 +30,6 @@ resource "google_compute_subnetwork" "gke_subnet" {
     metadata             = "INCLUDE_ALL_METADATA"
   }
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 }

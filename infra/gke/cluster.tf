@@ -55,6 +55,6 @@ resource "google_container_cluster" "primary" {
   deletion_protection = var.enable_deletion_protection
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 }

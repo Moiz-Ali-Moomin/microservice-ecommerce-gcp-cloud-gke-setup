@@ -1,13 +1,11 @@
 resource "google_iam_workload_identity_pool" "github" {
   project                   = var.project_id
-  location                  = "global"
   workload_identity_pool_id = var.workload_identity_pool_id
   display_name              = "GitHub Actions Pool"
 }
 
 resource "google_iam_workload_identity_pool_provider" "github" {
   project                            = var.project_id
-  location                           = "global"
   workload_identity_pool_id          = google_iam_workload_identity_pool.github.workload_identity_pool_id
   workload_identity_pool_provider_id = var.oidc_provider_id
   display_name                       = "GitHub Actions OIDC"

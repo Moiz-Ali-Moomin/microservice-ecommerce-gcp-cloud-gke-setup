@@ -78,6 +78,11 @@ readReplicas:
 
   podAntiAffinityPreset: hard
 
+  extendedConfiguration: |
+    max_connections = 300
+    shared_buffers = 512MB
+    effective_cache_size = 1536MB
+
 # -------------------
 # SECURITY
 # -------------------
@@ -89,10 +94,10 @@ networkPolicy:
 # OBSERVABILITY
 # -------------------
 metrics:
-  enabled: true
+  enabled: false
 
   serviceMonitor:
-    enabled: true
+    enabled: false
     namespace: platform-observability
     interval: 30s
     scrapeTimeout: 10s

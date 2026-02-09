@@ -7,7 +7,7 @@
 # ----------------------------------------------------------------------------
 # DEPS STAGE — download deps once, cache hard
 # ----------------------------------------------------------------------------
-FROM golang:1.22.0-bookworm AS deps
+FROM golang:1.24.0-bookworm AS deps
 
 WORKDIR /app
 

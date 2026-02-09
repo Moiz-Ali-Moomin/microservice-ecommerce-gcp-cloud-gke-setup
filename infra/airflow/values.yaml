@@ -1,44 +1,81 @@
-executor: KubernetesExecutor
+# Airflow Helm Chart Configuration
+# Chart: apache-airflow/airflow v1.18.x
+# IMPORTANT: Image version MUST match chart version (1.18.x expects Airflow 3.x)
 
-# Airflow Image (safe for all chart versions)
-airflow:
-  image:
-    repository: us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo/airflow
-    tag: custom
-    pullPolicy: Always
+executor: LocalExecutor  # LocalExecutor for resource efficiency (no workers needed)
 
+# Airflow Image - MUST be 3.x for chart 1.18.x
 images:
   airflow:
-    repository: us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo/airflow
-    tag: custom
-    pullPolicy: Always
+    repository: apache/airflow
+    tag: 3.0.2
+    pullPolicy: IfNotPresent
 
-# DAGs via GitSync
+# PostgreSQL - Embedded with stable image
+postgresql:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: bitnami/postgresql
+    tag: "16"  # Use major version, not specific point release
+  auth:
+    enablePostgresUser: true
+    postgresPassword: ""  # Auto-generated if empty
+
+# DAGs via GitSync (optional - enable if using git sync)
 dags:
   gitSync:
-    enabled: true
-    repo: https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup.git
-    branch: main
-    subPath: infra/airflow/dags
-    depth: 1
+    enabled: false
+    # repo: https://github.com/your-org/your-repo.git
+    # branch: main
+    # subPath: infra/airflow/dags
+    # depth: 1
 
 # Logs persistence
 logs:
   persistence:
     enabled: true
     size: 10Gi
-    storageClassName: standard-rwo
+    storageClassName: standard-rwo  # GKE-compatible
 
-# External Metadata DB
-data:
-  metadataSecretName: airflow-metadata-secret
+# Disable Helm hooks to prevent migration timeout issues
+createUserJob:
+  useHelmHooks: false
+migrateDatabaseJob:
+  useHelmHooks: false
 
-postgresql:
+# Replicas - Minimal for resource efficiency
+scheduler:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+webserver:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+# Disable workers (LocalExecutor doesn't need them)
+workers:
+  replicas: 0
+
+# Disable optional components to save resources
+triggerer:
+  replicas: 0
+dagProcessor:
+  replicas: 0
+flower:
   enabled: false
-
-# Core secrets
-fernetKeySecretName: airflow-secrets
-webserverSecretKeySecretName: airflow-secrets
 
 # RBAC
 rbac:
@@ -47,23 +84,3 @@ rbac:
 serviceAccount:
   create: true
   name: airflow-service-account
-
-# Scheduler
-scheduler:
-  resources:
-    requests:
-      cpu: 500m
-      memory: 512Mi
-    limits:
-      cpu: "1"
-      memory: 1Gi
-
-# Webserver
-webserver:
-  resources:
-    requests:
-      cpu: 500m
-      memory: 512Mi
-    limits:
-      cpu: "1"
-      memory: 1Gi

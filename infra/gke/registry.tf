@@ -8,7 +8,7 @@ resource "google_artifact_registry_repository" "repo" {
     team = "platform"
   }
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 }
 

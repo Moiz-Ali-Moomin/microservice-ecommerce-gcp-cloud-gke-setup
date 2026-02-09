@@ -10,13 +10,13 @@ podDisruptionBudget:
 global:
   image:
     registry: us-central1-docker.pkg.dev
-    project: ecommerce-project
+    project: ecommerce-microservice-53
     repository: ecommerce-repo
 
 image:
   name: api-gateway
-  tag: "1.0.0"
-  pullPolicy: IfNotPresent
+  tag: "latest"
+  pullPolicy: Always
 
 service:
   type: ClusterIP
@@ -32,6 +32,11 @@ env:
   REDIRECT_SERVICE_URL: "http://redirect-service.apps-public.svc.cluster.local:8080"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.platform-observability.svc.cluster.local:4317"
   OTEL_SERVICE_NAME: "api-gateway"
+
+envSecrets:
+  POSTGRES_DSN:
+    name: api-gateway-secrets
+    key: POSTGRES_DSN
 
 
 

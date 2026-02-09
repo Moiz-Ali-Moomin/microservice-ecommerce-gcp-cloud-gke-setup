@@ -5,7 +5,7 @@ external-secrets:
     create: true
     name: external-secrets-sa
     annotations:
-      iam.gke.io/gcp-service-account: "secrets-reader@PROJECT_ID.iam.gserviceaccount.com"
+      iam.gke.io/gcp-service-account: "secrets-reader@ecommerce-microservice-53.iam.gserviceaccount.com"
 
   webhook:
     create: true
@@ -27,4 +27,4 @@ external-secrets:
 
 # Only values that are ACTUALLY used by templates
 gcp:
-  projectId: PROJECT_ID
+  projectId: ecommerce-microservice-53

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.22.0 AS builder
+FROM golang:1.24.0 AS builder
 WORKDIR /app
 
 # 1. Copy shared library (Dependency)
@@ -22,7 +22,7 @@ COPY services/admin-backoffice-service /app/services/admin-backoffice-service
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -ldflags="-w -s" -o /app/server main.go
+    go build -ldflags="-w -s" -o /app/server ./cmd/main.go
 
 # ---------- Runtime ----------
 FROM gcr.io/distroless/static-debian12:nonroot

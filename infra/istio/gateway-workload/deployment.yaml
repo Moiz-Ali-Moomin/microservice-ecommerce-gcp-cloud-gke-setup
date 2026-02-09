@@ -50,7 +50,7 @@ spec:
 
       containers:
         - name: istio-proxy
-          image: istio/proxyv2:1.22.1
+          image: istio/proxyv2:1.25.2
           imagePullPolicy: IfNotPresent
 
           ports:
@@ -139,6 +139,13 @@ spec:
             - name: ingressgateway-ca-certs
               mountPath: /etc/istio/ingressgateway-ca-certs
               readOnly: true
+            - name: istio-data
+              mountPath: /var/lib/istio/data
+            - name: istio-proxy
+              mountPath: /etc/istio/proxy
+            - name: workload-socket
+              mountPath: /var/run/secrets/workload-spiffe-uds
+
 
       volumes:
         - name: istiod-ca-cert
@@ -172,3 +179,9 @@ spec:
           secret:
             secretName: istio-ingressgateway-ca-certs
             optional: true
+        - name: istio-data
+          emptyDir: {}
+        - name: istio-proxy
+          emptyDir: {}
+        - name: workload-socket
+          emptyDir: {}

@@ -6,13 +6,13 @@ autoscaling:
 global:
   image:
     registry: us-central1-docker.pkg.dev
-    project: ecommerce-project
+    project: ecommerce-microservice-53
     repository: ecommerce-repo
 
 image:
   name: reporting-service
-  tag: "1.0.0"
-  pullPolicy: IfNotPresent
+  tag: "latest"
+  pullPolicy: Always
 
 service:
   type: ClusterIP

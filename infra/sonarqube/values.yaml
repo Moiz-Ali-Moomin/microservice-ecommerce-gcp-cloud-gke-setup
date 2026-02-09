@@ -1,20 +1,35 @@
+# SonarQube Helm Chart Configuration
+# Chart: sonarqube/sonarqube
+# IMPORTANT: Requires privileged namespace for init-sysctl container
+
+# Community Edition (free)
+community:
+  enabled: true
+
+# Required by chart
+monitoringPasscode: "sonarmonitoring"
+
+# Persistence - GKE-compatible
 persistence:
   enabled: true
-  storageClass: standard
+  storageClass: standard-rwo  # GKE standard storage class
   accessMode: ReadWriteOnce
   size: 20Gi
 
+# Service
 service:
   type: ClusterIP
   externalPort: 9000
   internalPort: 9000
 
+# Ingress (optional)
 ingress:
-  enabled: true
-  hosts:
-    - name: sonar.internal.example.com
-      path: /
+  enabled: false
+  # hosts:
+  #   - name: sonar.example.com
+  #     path: /
 
+# Embedded PostgreSQL
 postgresql:
   enabled: true
   postgresqlUsername: sonar

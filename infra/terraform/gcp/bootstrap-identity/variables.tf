@@ -26,11 +26,11 @@ variable "service_account_name" {
 variable "k8s_namespace" {
   description = "Kubernetes namespace for External Secrets Operator"
   type        = string
-  default     = "ecommerce"
+  default     = "external-secrets"
 }
 
 variable "k8s_sa_name" {
   description = "Kubernetes Service Account name for External Secrets Operator"
   type        = string
-  default     = "external-secrets-sa"
+  default     = "external-secrets"
 }
