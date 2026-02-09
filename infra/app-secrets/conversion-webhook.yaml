@@ -1,0 +1,17 @@
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: conversion-webhook
+  namespace: apps-public
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: gcp-secret-store
+    kind: ClusterSecretStore
+  target:
+    name: conversion-webhook-secrets
+    creationPolicy: Owner
+  data:
+    - secretKey: clickbank-secret-key
+      remoteRef:
+        key: clickbank-secret-key

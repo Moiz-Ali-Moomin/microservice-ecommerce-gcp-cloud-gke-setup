@@ -5,8 +5,8 @@ autoscaling:
 
 global:
   image:
-    registry: REGISTRY_REGION-docker.pkg.dev
-    project: PROJECT_ID
+    registry: us-central1-docker.pkg.dev
+    project: ecommerce-project
     repository: ecommerce-repo
 
 image:
@@ -19,7 +19,7 @@ service:
   port: 8080
 
 env:
-  KAFKA_BROKERS: "kafka-bootstrap.kafka.svc.cluster.local:9092"
+
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.platform-observability.svc.cluster.local:4317"
   OTEL_SERVICE_NAME: "product-service"
 
@@ -34,4 +34,4 @@ resources:
 serviceAccount:
   create: true
   name: product-service
-  gcpServiceAccount: product-service@PROJECT_ID.iam.gserviceaccount.com
+  gcpServiceAccount: product-service@ecommerce-project.iam.gserviceaccount.com

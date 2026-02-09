@@ -5,8 +5,8 @@ autoscaling:
 
 global:
   image:
-    registry: REGISTRY_REGION-docker.pkg.dev
-    project: PROJECT_ID
+    registry: us-central1-docker.pkg.dev
+    project: ecommerce-project
     repository: ecommerce-repo
 
 image:
@@ -33,4 +33,4 @@ resources:
 serviceAccount:
   create: true
   name: user-service
-  gcpServiceAccount: user-service@PROJECT_ID.iam.gserviceaccount.com
+  gcpServiceAccount: user-service@ecommerce-project.iam.gserviceaccount.com

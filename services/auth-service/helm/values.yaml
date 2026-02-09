@@ -5,8 +5,8 @@ autoscaling:
 
 global:
   image:
-    registry: REGISTRY_REGION-docker.pkg.dev
-    project: PROJECT_ID
+    registry: us-central1-docker.pkg.dev
+    project: ecommerce-project
     repository: ecommerce-repo
 
 image:
@@ -31,7 +31,7 @@ env:
   OTEL_SERVICE_NAME: "auth-service"
 
   # Optional Kafka
-  KAFKA_BROKERS: "kafka-bootstrap.kafka.svc.cluster.local:9092"
+  KAFKA_BROKERS: "ecommerce-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092"
 
 envSecrets:
   JWT_SECRET:
@@ -58,4 +58,4 @@ resources:
 serviceAccount:
   create: true
   name: auth-service
-  gcpServiceAccount: auth-service@PROJECT_ID.iam.gserviceaccount.com
+  gcpServiceAccount: auth-service@ecommerce-project.iam.gserviceaccount.com

@@ -5,8 +5,8 @@ autoscaling:
 
 global:
   image:
-    registry: REGISTRY_REGION-docker.pkg.dev
-    project: PROJECT_ID
+    registry: us-central1-docker.pkg.dev
+    project: ecommerce-project
     repository: ecommerce-repo
 
 image:
@@ -21,6 +21,7 @@ service:
 env:
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.platform-observability.svc.cluster.local:4317"
   OTEL_SERVICE_NAME: "admin-backoffice-service"
+  METABASE_SITE_URL: "http://metabase.tooling-metabase.svc.cluster.local:3000"
 
 resources:
   requests:
@@ -33,4 +34,4 @@ resources:
 serviceAccount:
   create: true
   name: admin-backoffice-service
-  gcpServiceAccount: admin-backoffice-service@PROJECT_ID.iam.gserviceaccount.com
+  gcpServiceAccount: admin-backoffice-service@ecommerce-project.iam.gserviceaccount.com

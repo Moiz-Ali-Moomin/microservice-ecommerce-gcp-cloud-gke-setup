@@ -1,7 +1,7 @@
 use this command to install crds first than run the strimzi-install.yaml file
 
 
-kubectl apply -f https://strimzi.io/install/latest?namespace=data-kafka
+kubectl apply -f https://strimzi.io/install/latest?namespace=kafka
 
 
 curl -L https://github.com/strimzi/strimzi-kafka-operator/releases/download/0.40.0/strimzi-cluster-operator-0.40.0.yaml

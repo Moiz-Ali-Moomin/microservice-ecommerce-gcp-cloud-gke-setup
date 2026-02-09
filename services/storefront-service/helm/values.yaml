@@ -5,8 +5,8 @@ autoscaling:
 
 global:
   image:
-    registry: REGISTRY_REGION-docker.pkg.dev
-    project: PROJECT_ID
+    registry: us-central1-docker.pkg.dev
+    project: ecommerce-project
     repository: ecommerce-repo
 
 image:
@@ -19,9 +19,8 @@ service:
   port: 3000
 
 env:
-  PRODUCT_SERVICE_URL: "http://product-service.apps-core.svc.cluster.local:8080"
-  CART_SERVICE_URL: "http://cart-service.apps-core.svc.cluster.local:8080"
-  OFFER_SERVICE_URL: "http://offer-service.apps-core.svc.cluster.local:8080"
+  GATEWAY_URL: "http://api-gateway.apps-public.svc.cluster.local:8080"
+  KAFKA_BROKERS: "ecommerce-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.platform-observability.svc.cluster.local:4317"
   OTEL_SERVICE_NAME: "storefront-service"
 
@@ -36,4 +35,4 @@ resources:
 serviceAccount:
   create: true
   name: storefront-service
-  gcpServiceAccount: storefront-service@PROJECT_ID.iam.gserviceaccount.com
+  gcpServiceAccount: storefront-service@ecommerce-project.iam.gserviceaccount.com

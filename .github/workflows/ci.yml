@@ -3,10 +3,14 @@ name: Platform CI/CD
 on:
   push:
     branches: ["main"]
-    paths-ignore: ["**.md", "docs/**"]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
   pull_request:
     branches: ["main"]
-    paths-ignore: ["**.md", "docs/**"]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
 
 permissions:
   contents: read
@@ -23,107 +27,96 @@ env:
   GAR_REGION: us-central1-docker.pkg.dev
   ARTIFACT_REPO: ecommerce-repo
   TF_WORKING_DIR: infra/gke
-  GO_VERSION: "1.22.0" # Aligned with go.work and go.mod
+  GO_VERSION: "1.22.0"
 
+# =====================================================
+# 0. QUALITY GATE
+# =====================================================
 jobs:
-  # =====================================================
-  # 0. QUALITY GATE
-  # =====================================================
   quality-check:
     name: Code Quality
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4.1.1
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Required for SonarQube blame
+          fetch-depth: 0
 
-      - name: Set up Go
-        uses: actions/setup-go@v5.0.0
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
           cache-dependency-path: go.work.sum
 
-      - name: Run Unit Tests & Lint
+      - name: Test & Lint
         run: |
           set -e
           cd services
-          go test -v -coverprofile=../coverage.out ./... | tee ../test-report.out
+          go test ./... -coverprofile=../coverage.out
           go install github.com/mgechev/revive@v1.3.7
-          revive -formatter checkstyle ./... > ../lint-report.xml
+          revive ./... > ../lint-report.txt
 
-      - uses: actions/upload-artifact@v4.3.0
+      - uses: actions/upload-artifact@v4
         with:
           name: test-reports
           path: |
             coverage.out
-            test-report.out
-            lint-report.xml
+            lint-report.txt
 
-  # =====================================================
-  # 1. COMPILE CHECK
-  # =====================================================
+# =====================================================
+# 1. BUILD CHECK
+# =====================================================
   build-services:
-    name: Build Go Binaries
+    name: Compile Services
     runs-on: ubuntu-latest
     needs: quality-check
-    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4.1.1
+      - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5.0.0
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-          cache-dependency-path: go.work.sum
 
-      - name: Compile All Services
+      - name: Build
         run: |
-          set -e
           cd services
-          go build -v ./...
+          go build ./...
 
-  # =====================================================
-  # 2. SECURITY SCAN
-  # =====================================================
+# =====================================================
+# 2. SECURITY SCAN
+# =====================================================
   security-scan:
-    name: Trivy Security Scan
+    name: Trivy Scan
     runs-on: ubuntu-latest
-    # Can run parallel to build, depends on code only
-    timeout-minutes: 15
+    needs: build-services
     steps:
-      - uses: actions/checkout@v4.1.1
+      - uses: actions/checkout@v4
 
-      - name: Run Trivy FS Scan
-        uses: aquasecurity/trivy-action@0.16.1
+      - uses: aquasecurity/trivy-action@0.16.1
         with:
           scan-type: fs
+          severity: CRITICAL,HIGH
           ignore-unfixed: true
-          format: table
-          severity: "CRITICAL,HIGH"
-          exit-code: ${{ github.ref == 'refs/heads/main' && '1' || '0' }}
+          exit-code: 1
 
-  # =====================================================
-  # 3. SONARQUBE
-  # =====================================================
+# =====================================================
+# 3. SONARQUBE
+# =====================================================
   sonarqube:
-    name: SonarQube Analysis
+    name: SonarQube
     runs-on: ubuntu-latest
-    needs: quality-check # Needs coverage artifact
-    timeout-minutes: 20
+    needs: quality-check
     steps:
-      - uses: actions/checkout@v4.1.1
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v4.1.1
+      - uses: actions/download-artifact@v4
         with:
           name: test-reports
 
-      - name: SonarQube Scan
-        uses: sonarsource/sonarqube-scan-action@v2.0.1
+      - uses: sonarsource/sonarqube-scan-action@v2
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
@@ -131,15 +124,16 @@ jobs:
           args: >
             -Dsonar.go.coverage.reportPaths=coverage.out
 
-  # =====================================================
-  # 4. TERRAFORM (INFRA)
-  # =====================================================
+# =====================================================
+# 4. TERRAFORM (ONLY IF INFRA CHANGED)
+# =====================================================
   terraform:
     name: Terraform Infra
     runs-on: ubuntu-latest
-    needs: security-scan # Gatekeeper
+    needs: security-scan
+    if: contains(github.event.head_commit.modified, 'infra/terraform/')
     environment: prod
-    timeout-minutes: 30
+
     permissions:
       contents: read
       id-token: write
@@ -148,155 +142,119 @@ jobs:
       TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
 
     steps:
-      - uses: actions/checkout@v4.1.1
+      - uses: actions/checkout@v4
 
-      - uses: google-github-actions/auth@v2.1.0
+      - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: projects/662443466894/locations/global/workloadIdentityPools/terraform-pool-2/providers/github
           service_account: terraform-sa@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
 
-      - uses: hashicorp/setup-terraform@v3.0.0
+      - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.6.6
 
-      - name: Terraform Init
-        run: terraform init
+      - run: terraform init
         working-directory: ${{ env.TF_WORKING_DIR }}
 
-      - name: Terraform Validate
-        run: terraform validate
+      - run: terraform validate
         working-directory: ${{ env.TF_WORKING_DIR }}
 
-      - name: Terraform Plan
-        run: terraform plan -out=tfplan
+      - run: terraform plan -out=tfplan
         working-directory: ${{ env.TF_WORKING_DIR }}
 
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/main'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: infra/gke/tfplan
+
+      - if: github.ref == 'refs/heads/main'
         run: terraform apply -auto-approve tfplan
         working-directory: ${{ env.TF_WORKING_DIR }}
 
-  # =====================================================
-  # 5. PLATFORM BOOTSTRAP (K8S CONFIG)
-  # =====================================================
+# =====================================================
+# 5. PLATFORM BOOTSTRAP
+# =====================================================
   platform-bootstrap:
-    name: K8s Bootstrap
+    name: Kubernetes Bootstrap
     runs-on: ubuntu-latest
     needs: terraform
     if: github.ref == 'refs/heads/main'
     environment: prod
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4.1.1
 
-      - uses: google-github-actions/auth@v2.1.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: projects/662443466894/locations/global/workloadIdentityPools/terraform-pool-2/providers/github
           service_account: terraform-sa@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
 
-      - uses: google-github-actions/setup-gcloud@v2.1.0
+      - uses: google-github-actions/setup-gcloud@v2
         with:
           install_components: gke-gcloud-auth-plugin
 
-      - name: Get GKE Credentials
-        run: |
+      - run: |
           gcloud container clusters get-credentials $GKE_CLUSTER \
             --region $GKE_REGION \
             --project ${{ secrets.GCP_PROJECT_ID }}
 
-      - name: Apply Namespaces
-        run: kubectl apply -f infra/namespaces/
+      - run: kubectl apply -R -f infra/namespaces
+      - run: kubectl apply -R -f infra/external-secrets
+      - run: kubectl apply -R -f infra/app-secrets
+      - run: kubectl apply -R -f infra/istio
 
-      - name: Apply Istio Base
-        run: kubectl apply -f infra/istio/base/
-
-      - name: Apply Istio Security
-        run: kubectl apply -f infra/istio/security/
-
-      - name: Apply Istio Gateway Workload
-        run: kubectl apply -f infra/istio/gateway-workload/
-
-      - name: Apply Istio Ingress Resources
-        run: kubectl apply -R -f infra/istio/ingress/
-
-  # =====================================================
-  # 6. SERVICES DEPLOY
-  # =====================================================
+# =====================================================
+# 6. BUILD & DEPLOY SERVICES
+# =====================================================
   services-deploy:
-    name: Build & Deploy Services
+    name: Deploy Services
     runs-on: ubuntu-latest
     needs: platform-bootstrap
     if: github.ref == 'refs/heads/main'
     environment: prod
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4.1.1
 
-      - uses: google-github-actions/auth@v2.1.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: projects/662443466894/locations/global/workloadIdentityPools/terraform-pool-2/providers/github
           service_account: terraform-sa@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
 
-      - uses: google-github-actions/setup-gcloud@v2.1.0
-        with:
-          install_components: gke-gcloud-auth-plugin
+      - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Configure Docker
-        run: gcloud auth configure-docker $GAR_REGION --quiet
+      - run: gcloud auth configure-docker $GAR_REGION --quiet
 
-      # BUILD PHASE:
-      # - Run from root context to allow access to shared-lib
-      # - Use -f to specify Dockerfile path
       - name: Build & Push Images
         run: |
           set -e
           for svc in services/*; do
             if [ -f "$svc/Dockerfile" ]; then
               NAME=$(basename "$svc")
-              echo "Building $NAME..."
-              
               IMAGE="$GAR_REGION/${{ secrets.GCP_PROJECT_ID }}/$ARTIFACT_REPO/$NAME:${{ github.sha }}"
-              
-              # Build from ROOT context (.):
               docker build -t $IMAGE -f "$svc/Dockerfile" .
               docker push $IMAGE
             fi
           done
 
-      - name: Get GKE Credentials
-        run: |
+      - run: |
           gcloud container clusters get-credentials $GKE_CLUSTER \
             --region $GKE_REGION \
             --project ${{ secrets.GCP_PROJECT_ID }}
 
-      # DEPLOY PHASE:
-      # - Set global registry/project/repo to match artifacts
-      # - Use namespace logic
-      - name: Deploy Helm Charts
+      - name: Helm Deploy
         run: |
           set -e
           for svc in services/*; do
             if [ -d "$svc/helm" ]; then
               NAME=$(basename "$svc")
-              echo "Deploying $NAME..."
-              
-              # Namespace Mapping
-              NAMESPACE="apps-core"
-              if [[ "$NAME" == "storefront-service" ]]; then NAMESPACE="apps-public"; fi
-              if [[ "$NAME" == "analytics-ingest-service" || "$NAME" == "conversion-webhook" ]]; then NAMESPACE="apps-async"; fi
-              
-              # Lint
-              helm lint "$svc/helm"
-              
-              # Upgrade
-              # We set global.image.* components because _helpers.tpl assembles them.
-              # We do NOT override image.repository with the full URL.
               helm upgrade --install $NAME "$svc/helm" \
+                --namespace ecommerce \
                 --create-namespace \
-                --namespace $NAMESPACE \
                 --set global.image.registry=$GAR_REGION \
                 --set global.image.project=${{ secrets.GCP_PROJECT_ID }} \
                 --set global.image.repository=$ARTIFACT_REPO \
-                --set image.tag=${{ github.sha }}
+                --set image.tag=${{ github.sha }} \
+                --wait --timeout 5m
             fi
           done

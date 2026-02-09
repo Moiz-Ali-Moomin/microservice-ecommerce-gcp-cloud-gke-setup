@@ -35,7 +35,7 @@ func main() {
 
 	brokers := strings.Split(os.Getenv("KAFKA_BROKERS"), ",")
 	if len(brokers) == 0 || brokers[0] == "" {
-		brokers = []string{"kafka-headless.kafka.svc:9092"}
+		brokers = []string{"kafka:9092"}
 	}
 
 	// We create producers for allowed topics on demand or pre-init map

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -20,12 +21,12 @@ func main() {
 	if err != nil {
 		logger.Log.Fatal("Failed to init tracer", zap.Error(err))
 	}
-	defer func() { _ = tp.Shutdown(nil) }()
+	defer func() { _ = tp.Shutdown(context.Background()) }()
 
 	// Kafka Producer Setup
 	brokers := strings.Split(os.Getenv("KAFKA_BROKERS"), ",")
 	if len(brokers) == 0 || brokers[0] == "" {
-		brokers = []string{"kafka-headless.kafka.svc:9092"}
+		brokers = []string{"kafka:9092"}
 	}
 
 	producer, err := event.NewProducer(brokers, "conversion.completed")

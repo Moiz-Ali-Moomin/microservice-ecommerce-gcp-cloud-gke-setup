@@ -1,11 +1,11 @@
 external-secrets:
-  installCRDs: true
+  installCRDs: true   # keep if this is first install
 
   serviceAccount:
     create: true
     name: external-secrets-sa
     annotations:
-      iam.gke.io/gcp-service-account: "secrets-reader@ecommerce-microservice-53.iam.gserviceaccount.com"
+      iam.gke.io/gcp-service-account: "secrets-reader@PROJECT_ID.iam.gserviceaccount.com"
 
   webhook:
     create: true
@@ -25,9 +25,6 @@ external-secrets:
     enabled: true
     minAvailable: 1
 
-# -------------------
-# GCP WORKLOAD IDENTITY
-# -------------------
+# Only values that are ACTUALLY used by templates
 gcp:
-  projectId: ecommerce-microservice-53
-  workloadIdentityEmail: secrets-reader@ecommerce-microservice-53.iam.gserviceaccount.com
+  projectId: PROJECT_ID

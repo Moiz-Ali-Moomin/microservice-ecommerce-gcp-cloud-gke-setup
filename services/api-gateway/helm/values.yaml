@@ -9,8 +9,8 @@ podDisruptionBudget:
 
 global:
   image:
-    registry: REGISTRY_REGION-docker.pkg.dev
-    project: PROJECT_ID
+    registry: us-central1-docker.pkg.dev
+    project: ecommerce-project
     repository: ecommerce-repo
 
 image:
@@ -23,20 +23,17 @@ service:
   port: 8080
 
 env:
-  KAFKA_BROKERS: "kafka-bootstrap.kafka.svc.cluster.local:9092"
   AUTH_SERVICE_URL: "http://auth-service.apps-core.svc.cluster.local:8080"
   USER_SERVICE_URL: "http://user-service.apps-core.svc.cluster.local:8080"
   OFFER_SERVICE_URL: "http://offer-service.apps-core.svc.cluster.local:8080"
   CART_SERVICE_URL: "http://cart-service.apps-core.svc.cluster.local:8080"
   STOREFRONT_SERVICE_URL: "http://storefront-service.apps-public.svc.cluster.local:3000"
-  REDIS_ADDR: "redis-master.data.svc.cluster.local:6379"
+  LANDING_SERVICE_URL: "http://landing-service.apps-public.svc.cluster.local:8080"
+  REDIRECT_SERVICE_URL: "http://redirect-service.apps-public.svc.cluster.local:8080"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.platform-observability.svc.cluster.local:4317"
   OTEL_SERVICE_NAME: "api-gateway"
 
-envSecrets:
-  POSTGRES_DSN:
-    name: "api-gateway-secrets"
-    key: "postgres-dsn"
+
 
 resources:
   requests:
@@ -49,4 +46,4 @@ resources:
 serviceAccount:
   create: true
   name: api-gateway
-  gcpServiceAccount: api-gateway@PROJECT_ID.iam.gserviceaccount.com
+  gcpServiceAccount: api-gateway@ecommerce-project.iam.gserviceaccount.com

@@ -47,3 +47,27 @@ variable "metabase_db_password" {
   type        = string
   sensitive   = true
 }
+
+variable "auth_jwt_secret" {
+  description = "JWT Secret for Auth Service"
+  type        = string
+  sensitive   = true
+}
+
+variable "auth_db_user" {
+  description = "Database user for Auth Service"
+  type        = string
+  sensitive   = true
+}
+
+variable "clickbank_secret_key" {
+  description = "Clickbank Secret Key for Conversion Webhook"
+  type        = string
+  sensitive   = true
+}
+
+variable "api_gateway_postgres_dsn" {
+  description = "Postgres DSN for API Gateway"
+  type        = string
+  sensitive   = true
+}
