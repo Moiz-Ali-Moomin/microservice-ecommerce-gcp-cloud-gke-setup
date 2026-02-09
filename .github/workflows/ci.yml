@@ -131,7 +131,6 @@ jobs:
     name: Terraform Infra
     runs-on: ubuntu-latest
     needs: security-scan
-    if: contains(github.event.head_commit.modified, 'infra/terraform/')
     environment: prod
 
     permissions:
@@ -143,6 +142,19 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for Infra Changes
+        id: filter
+        run: |
+          # Check if infra/terraform changed in the push
+          changed_files=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} || echo "")
+          if echo "$changed_files" | grep -q "infra/terraform/"; then
+            echo "changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "changes=false" >> $GITHUB_OUTPUT
+          fi
 
       - uses: google-github-actions/auth@v2
         with:
@@ -150,24 +162,29 @@ jobs:
           service_account: terraform-sa@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
 
       - uses: hashicorp/setup-terraform@v3
+        if: steps.filter.outputs.changes == 'true'
         with:
           terraform_version: 1.6.6
 
       - run: terraform init
+        if: steps.filter.outputs.changes == 'true'
         working-directory: ${{ env.TF_WORKING_DIR }}
 
       - run: terraform validate
+        if: steps.filter.outputs.changes == 'true'
         working-directory: ${{ env.TF_WORKING_DIR }}
 
       - run: terraform plan -out=tfplan
+        if: steps.filter.outputs.changes == 'true'
         working-directory: ${{ env.TF_WORKING_DIR }}
 
       - uses: actions/upload-artifact@v4
+        if: steps.filter.outputs.changes == 'true'
         with:
           name: tfplan
           path: infra/gke/tfplan
 
-      - if: github.ref == 'refs/heads/main'
+      - if: github.ref == 'refs/heads/main' && steps.filter.outputs.changes == 'true'
         run: terraform apply -auto-approve tfplan
         working-directory: ${{ env.TF_WORKING_DIR }}
 
@@ -199,9 +216,6 @@ jobs:
             --project ${{ secrets.GCP_PROJECT_ID }}
 
       - run: kubectl apply -R -f infra/namespaces
-      - run: kubectl apply -R -f infra/external-secrets
-      - run: kubectl apply -R -f infra/app-secrets
-      - run: kubectl apply -R -f infra/istio
 
 # =====================================================
 # 6. BUILD & DEPLOY SERVICES
@@ -228,12 +242,21 @@ jobs:
       - name: Build & Push Images
         run: |
           set -e
+          # Optimization: Identify changed files to minimize build blast radius
+          CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} || echo "")
+
           for svc in services/*; do
             if [ -f "$svc/Dockerfile" ]; then
               NAME=$(basename "$svc")
-              IMAGE="$GAR_REGION/${{ secrets.GCP_PROJECT_ID }}/$ARTIFACT_REPO/$NAME:${{ github.sha }}"
-              docker build -t $IMAGE -f "$svc/Dockerfile" .
-              docker push $IMAGE
+              # Monorepo optimization: Only build if service folder OR shared-lib changed
+              if echo "$CHANGED" | grep -qE "services/$NAME/|services/shared-lib/"; then
+                echo "Building $NAME (Detected Changes)"
+                IMAGE="$GAR_REGION/${{ secrets.GCP_PROJECT_ID }}/$ARTIFACT_REPO/$NAME:${{ github.sha }}"
+                docker build -t $IMAGE -f "$svc/Dockerfile" .
+                docker push $IMAGE
+              else
+                 echo "Skipping $NAME (No Changes)"
+              fi
             fi
           done
 
@@ -245,16 +268,24 @@ jobs:
       - name: Helm Deploy
         run: |
           set -e
+          CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} || echo "")
+
           for svc in services/*; do
             if [ -d "$svc/helm" ]; then
               NAME=$(basename "$svc")
-              helm upgrade --install $NAME "$svc/helm" \
-                --namespace ecommerce \
-                --create-namespace \
-                --set global.image.registry=$GAR_REGION \
-                --set global.image.project=${{ secrets.GCP_PROJECT_ID }} \
-                --set global.image.repository=$ARTIFACT_REPO \
-                --set image.tag=${{ github.sha }} \
-                --wait --timeout 5m
+              # Optimization: Only deploy if service code OR helm chart changed
+              if echo "$CHANGED" | grep -qE "services/$NAME/|services/shared-lib/"; then
+                 echo "Deploying $NAME (Detected Changes)"
+                 helm upgrade --install $NAME "$svc/helm" \
+                   --namespace ecommerce \
+                   --create-namespace \
+                   --set global.image.registry=$GAR_REGION \
+                   --set global.image.project=${{ secrets.GCP_PROJECT_ID }} \
+                   --set global.image.repository=$ARTIFACT_REPO \
+                   --set image.tag=${{ github.sha }} \
+                   --wait --timeout 5m
+              else
+                 echo "Skipping Deploy for $NAME (No Changes)"
+              fi
             fi
           done

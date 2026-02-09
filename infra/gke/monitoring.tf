@@ -1,13 +1,3 @@
-terraform {
-  required_providers {
-    google = {
-      source  = "hashicorp/google"
-      version = ">= 5.0"
-    }
-  }
-}
-
-# Managed Prometheus (GMP) - GKE Cluster Dashboard
 resource "google_monitoring_dashboard" "gke_dashboard" {
   project = var.project_id
 
@@ -22,10 +12,12 @@ resource "google_monitoring_dashboard" "gke_dashboard" {
         "xyChart": {
           "dataSets": [
             {
+              "plotType": "LINE",
               "timeSeriesQuery": {
                 "timeSeriesFilter": {
                   "filter": "metric.type=\"kubernetes.io/container/cpu/core_usage_time\" resource.type=\"k8s_container\"",
                   "aggregation": {
+                    "alignmentPeriod": "60s",
                     "perSeriesAligner": "ALIGN_RATE",
                     "groupByFields": [
                       "resource.label.cluster_name",
@@ -47,10 +39,12 @@ resource "google_monitoring_dashboard" "gke_dashboard" {
         "xyChart": {
           "dataSets": [
             {
+              "plotType": "LINE",
               "timeSeriesQuery": {
                 "timeSeriesFilter": {
                   "filter": "metric.type=\"kubernetes.io/container/memory/used_bytes\" resource.type=\"k8s_container\"",
                   "aggregation": {
+                    "alignmentPeriod": "60s",
                     "perSeriesAligner": "ALIGN_MEAN",
                     "groupByFields": [
                       "resource.label.cluster_name",

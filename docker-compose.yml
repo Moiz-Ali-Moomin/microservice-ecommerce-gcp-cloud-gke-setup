@@ -15,6 +15,23 @@ volumes:
   prometheus_data:
   grafana_data:
 
+
+x-common-env: &common-env
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: 5432
+  POSTGRES_USER: user
+  POSTGRES_PASSWORD: password
+  POSTGRES_DB: ecommerce_db
+
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+
+  KAFKA_BROKERS: kafka:9092
+
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+  OTEL_SERVICE_NAME: local
+
 services:
   # ===============================================================
   # DATA LAYER
@@ -31,9 +48,9 @@ services:
       POSTGRES_DB: ecommerce_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    networks: [ecommerce-net]
+    networks: [ ecommerce-net ]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d ecommerce_db"]
+      test: [ "CMD-SHELL", "pg_isready -U user -d ecommerce_db" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -46,9 +63,9 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    networks: [ecommerce-net]
+    networks: [ ecommerce-net ]
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -64,13 +81,12 @@ services:
     volumes:
       - kafka_data:/var/lib/kafka/data
     command: >
-      bash -c "
-      if [ ! -f /var/lib/kafka/data/meta.properties ]; then
+      bash -c " if [ ! -f /var/lib/kafka/data/meta.properties ]; then
         CLUSTER_ID=$$(/opt/kafka/bin/kafka-storage.sh random-uuid)
         /opt/kafka/bin/kafka-storage.sh format -t $$CLUSTER_ID \
           -c /opt/kafka/config/kraft/server.properties --ignore-formatted;
       fi"
-    networks: [ecommerce-net]
+    networks: [ ecommerce-net ]
 
   kafka:
     image: apache/kafka:3.7.0
@@ -95,13 +111,49 @@ services:
     depends_on:
       kafka-init:
         condition: service_completed_successfully
-    networks: [ecommerce-net]
+    networks: [ ecommerce-net ]
     healthcheck:
-      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/9092'"]
+      test: [ "CMD-SHELL", "bash -c '</dev/tcp/localhost/9092'" ]
       interval: 5s
       timeout: 5s
       retries: 10
     restart: unless-stopped
+
+  # ===============================================================
+  # APPLICATION SERVICES (SAMPLE — replicate for others)
+  # ===============================================================
+
+  admin-backoffice-service:
+    image: us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo/admin-backoffice-service:latest
+    container_name: admin-backoffice-service
+    environment:
+      <<: *common-env
+      OTEL_SERVICE_NAME: admin-backoffice-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [ ecommerce-net ]
+    restart: unless-stopped
+
+  cart-service:
+    image: us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo/cart-service:latest
+    container_name: cart-service
+    environment:
+      <<: *common-env
+      OTEL_SERVICE_NAME: cart-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks: [ ecommerce-net ]
+    restart: unless-stopped
+
+  # 👉 repeat pattern for remaining services
 
   # ===============================================================
   # OBSERVABILITY
@@ -110,29 +162,26 @@ services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.96.0
     container_name: otel-collector
-    command: ["--config=/etc/otel-config.yaml"]
+    command: [ "--config=/etc/otel-config.yaml" ]
     volumes:
       - ./observability/otel/otel-collector.yaml:/etc/otel-config.yaml:ro
     ports:
       - "4317:4317"
       - "4318:4318"
       - "8889:8889"
-    networks: [ecommerce-net]
+    networks: [ ecommerce-net ]
     restart: unless-stopped
 
   prometheus:
     image: prom/prometheus:v2.50.1
     container_name: prometheus
-    command:
-      - --config.file=/etc/prometheus/prometheus.yml
-      - --storage.tsdb.path=/prometheus
     ports:
       - "9090:9090"
     volumes:
       - ./observability/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
-    depends_on: [otel-collector]
-    networks: [ecommerce-net]
+    depends_on: [ otel-collector ]
+    networks: [ ecommerce-net ]
     restart: unless-stopped
 
   grafana:
@@ -144,29 +193,23 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: admin
     volumes:
       - grafana_data:/var/lib/grafana
-    depends_on: [prometheus, loki, tempo]
-    networks: [ecommerce-net]
+    depends_on: [ prometheus, loki, tempo ]
+    networks: [ ecommerce-net ]
     restart: unless-stopped
 
   loki:
     image: grafana/loki:2.9.4
     container_name: loki
-    command: -config.file=/etc/loki/local-config.yaml
-    volumes:
-      - ./observability/loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
     ports:
       - "3100:3100"
-    networks: [ecommerce-net]
+    networks: [ ecommerce-net ]
     restart: unless-stopped
 
   tempo:
     image: grafana/tempo:2.4.1
     container_name: tempo
-    command: ["-config.file=/etc/tempo.yaml"]
-    volumes:
-      - ./observability/tempo/tempo-config.yaml:/etc/tempo.yaml:ro
     ports:
       - "3200:3200"
       - "4317:4317"
-    networks: [ecommerce-net]
+    networks: [ ecommerce-net ]
     restart: unless-stopped

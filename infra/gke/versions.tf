@@ -12,16 +12,4 @@ terraform {
       version = ">= 5.0"
     }
   }
-
-  # ----------------------------
-  # Remote State (PRODUCTION)
-  # ----------------------------
-  # Uncomment for prod use
-  #
-  # backend "gcs" {
-  #   bucket  = "tf-state-ecommerce-prod"
-  #   prefix  = "gke/platform"
-  #   project = "your-project-id"
-  #   location = "us"
-  # }
 }

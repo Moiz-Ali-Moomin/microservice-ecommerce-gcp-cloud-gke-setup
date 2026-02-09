@@ -21,9 +21,9 @@ resource "google_container_cluster" "primary" {
     services_secondary_range_name = "gke-services"
   }
 
-  network_policy {
-    enabled = true
-  }
+  # IMPORTANT:
+  # network_policy is NOT compatible with ADVANCED_DATAPATH
+  # DO NOT enable it
 
   workload_identity_config {
     workload_pool = "${var.project_id}.svc.id.goog"
@@ -31,14 +31,13 @@ resource "google_container_cluster" "primary" {
 
   private_cluster_config {
     enable_private_nodes    = true
-    enable_private_endpoint = false # true = fully private (VPN/Bastion needed)
+    enable_private_endpoint = false
     master_ipv4_cidr_block  = var.master_ipv4_cidr_block
   }
 
-  # Dataplane V2 (eBPF)
+  # Dataplane V2 (Cilium / eBPF)
   datapath_provider = "ADVANCED_DATAPATH"
 
-  # Maintenance Window
   maintenance_policy {
     daily_maintenance_window {
       start_time = "03:00"
@@ -49,7 +48,6 @@ resource "google_container_cluster" "primary" {
     channel = "REGULAR"
   }
 
-  # Cost visibility
   cost_management_config {
     enabled = true
   }

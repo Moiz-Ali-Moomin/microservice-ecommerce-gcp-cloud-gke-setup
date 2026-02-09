@@ -1,0 +1,23 @@
+# GIT
+.git
+.gitignore
+.github
+
+# INFRA & CONFIG
+infra/
+argocd/
+docker-compose.yml
+Makefile
+*.md
+
+# LOCAL DEV
+*.log
+tmp/
+bin/
+test-reports/
+coverage.out
+lint-report.txt
+
+# OS
+.DS_Store
+Thumbs.db

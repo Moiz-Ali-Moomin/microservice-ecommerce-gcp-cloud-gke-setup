@@ -1,30 +1,17 @@
 # syntax=docker/dockerfile:1
 
 # ============================================================================
-# UNIFIED GO MICROSERVICES BUILDER - Production Grade
-# ============================================================================
-
-# Architecture:
-#   1. deps    - Download all dependencies ONCE (cached unless go.mod changes)
-#   2. builder - Compile ALL binaries in parallel (cached unless source changes)
-#   3. runtime - Distroless images per service (just COPY binary)
-#
-# Optimizations:
-#   - go.mod/go.sum copied FIRST for dependency layer caching
-#   - BuildKit cache mounts for /go/pkg/mod and go-build cache
-#   - Parallel compilation
-#   - Static binaries (CGO_ENABLED=0)
-#   - Distroless nonroot runtime
+# UNIFIED GO MICROSERVICES BUILDER - Production Grade (FIXED)
 # ============================================================================
 
 # ----------------------------------------------------------------------------
-# DEPS STAGE
+# DEPS STAGE — download deps once, cache hard
 # ----------------------------------------------------------------------------
 FROM golang:1.22.0-bookworm AS deps
 
 WORKDIR /app
 
-# Copy go.mod / go.sum ONLY (dependency cache layer)
+# Copy go.mod / go.sum ONLY (max cache hit)
 COPY services/shared-lib/go.mod services/shared-lib/go.sum ./services/shared-lib/
 COPY services/admin-backoffice-service/go.mod services/admin-backoffice-service/go.sum ./services/admin-backoffice-service/
 COPY services/analytics-ingest-service/go.mod services/analytics-ingest-service/go.sum ./services/analytics-ingest-service/
@@ -38,35 +25,35 @@ COPY services/feature-flag-service/go.mod services/feature-flag-service/go.sum .
 COPY services/landing-service/go.mod services/landing-service/go.sum ./services/landing-service/
 COPY services/notification-service/go.mod services/notification-service/go.sum ./services/notification-service/
 COPY services/offer-service/go.mod services/offer-service/go.sum ./services/offer-service/
+COPY services/product-service/go.mod services/product-service/go.sum ./services/product-service/
 COPY services/redirect-service/go.mod services/redirect-service/go.sum ./services/redirect-service/
 COPY services/reporting-service/go.mod services/reporting-service/go.sum ./services/reporting-service/
 COPY services/storefront-service/go.mod services/storefront-service/go.sum ./services/storefront-service/
 COPY services/user-service/go.mod services/user-service/go.sum ./services/user-service/
-COPY services/product-service/go.mod services/product-service/go.sum ./services/product-service/
 
 # Download dependencies (cached)
 RUN --mount=type=cache,target=/go/pkg/mod \
-    cd services/shared-lib && go mod download && \
-    cd ../admin-backoffice-service && go mod download && \
-    cd ../analytics-ingest-service && go mod download && \
-    cd ../api-gateway && go mod download && \
-    cd ../attribution-service && go mod download && \
-    cd ../audit-service && go mod download && \
-    cd ../auth-service && go mod download && \
-    cd ../cart-service && go mod download && \
-    cd ../conversion-webhook && go mod download && \
-    cd ../feature-flag-service && go mod download && \
-    cd ../landing-service && go mod download && \
-    cd ../notification-service && go mod download && \
-    cd ../offer-service && go mod download && \
-    cd ../redirect-service && go mod download && \
-    cd ../reporting-service && go mod download && \
-    cd ../storefront-service && go mod download && \
-    cd ../user-service && go mod download && \
-    cd ../product-service && go mod download
+  cd services/shared-lib && go mod download && \
+  cd ../admin-backoffice-service && go mod download && \
+  cd ../analytics-ingest-service && go mod download && \
+  cd ../api-gateway && go mod download && \
+  cd ../attribution-service && go mod download && \
+  cd ../audit-service && go mod download && \
+  cd ../auth-service && go mod download && \
+  cd ../cart-service && go mod download && \
+  cd ../conversion-webhook && go mod download && \
+  cd ../feature-flag-service && go mod download && \
+  cd ../landing-service && go mod download && \
+  cd ../notification-service && go mod download && \
+  cd ../offer-service && go mod download && \
+  cd ../product-service && go mod download && \
+  cd ../redirect-service && go mod download && \
+  cd ../reporting-service && go mod download && \
+  cd ../storefront-service && go mod download && \
+  cd ../user-service && go mod download
 
 # ----------------------------------------------------------------------------
-# BUILDER STAGE
+# BUILDER STAGE — build ALL binaries once
 # ----------------------------------------------------------------------------
 FROM deps AS builder
 
@@ -75,50 +62,59 @@ WORKDIR /app
 COPY services ./services
 
 ENV CGO_ENABLED=0 \
-    GOOS=linux \
-    GOARCH=amd64
+  GOOS=linux \
+  GOARCH=amd64
 
 RUN mkdir -p /binaries
 
 RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    set -e; \
-    services="\
-      admin-backoffice-service \
-      analytics-ingest-service \
-      api-gateway \
-      attribution-service \
-      audit-service \
-      auth-service \
-      cart-service \
-      conversion-webhook \
-      feature-flag-service \
-      landing-service \
-      notification-service \
-      offer-service \
-      product-service \
-      redirect-service \
-      reporting-service \
-      storefront-service \
-      user-service"; \
-    pids=""; \
-    for svc in $services; do \
-      echo "Building $svc"; \
-      ( \
-        cd services/$svc && \
-        if [ -f ./cmd/main.go ]; then \
-          target=./cmd/main.go; \
-        else \
-          target=./main.go; \
-        fi && \
-        go build -ldflags="-w -s" -o /binaries/$svc $target \
-      ) & \
-      pids="$pids $!"; \
-    done; \
-    for pid in $pids; do wait $pid; done
+  --mount=type=cache,target=/root/.cache/go-build \
+  set -e; \
+  services="\
+  admin-backoffice-service \
+  analytics-ingest-service \
+  api-gateway \
+  attribution-service \
+  audit-service \
+  auth-service \
+  cart-service \
+  conversion-webhook \
+  feature-flag-service \
+  landing-service \
+  notification-service \
+  offer-service \
+  product-service \
+  redirect-service \
+  reporting-service \
+  storefront-service \
+  user-service"; \
+  pids=""; \
+  for svc in $services; do \
+  echo "Building $svc"; \
+  ( \
+  cd services/$svc && \
+  if [ -f ./cmd/main.go ]; then \
+  target=./cmd/main.go; \
+  else \
+  target=./main.go; \
+  fi && \
+  go build -ldflags="-w -s" -o /binaries/$svc $target \
+  ) & \
+  pids="$pids $!"; \
+  done; \
+  for pid in $pids; do wait $pid; done
 
 # ----------------------------------------------------------------------------
-# RUNTIME STAGES (DISTROLESS)
+# RUNTIME STAGE — ONE IMAGE PER SERVICE (THIS WAS THE BUG)
 # ----------------------------------------------------------------------------
+ARG SERVICE_NAME
 
-FROM gcr.io/distroless
+FROM gcr.io/distroless/static-debian12:nonroot AS runtime
+
+WORKDIR /app
+
+COPY --from=builder /binaries/${SERVICE_NAME} /app/app
+
+USER nonroot:nonroot
+
+ENTRYPOINT ["/app/app"]
