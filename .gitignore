@@ -102,3 +102,5 @@ deployment-troubleshooting.md
 decommissioning_script.ps1
 istio-1.22.1/
 bin/
+
+metabase-sre-analysis.md
