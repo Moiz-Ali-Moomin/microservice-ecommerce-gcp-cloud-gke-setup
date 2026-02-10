@@ -90,3 +90,15 @@ istio.zip
 
 
 
+
+# =============================================================================
+# User-Specific Ignores (Operational Artifacts & Tools)
+# =============================================================================
+*.ps1
+GKE_SRE_PLATFORM_PLAYBOOK.md
+kafka-troubleshooting.md
+success.md
+deployment-troubleshooting.md
+decommissioning_script.ps1
+istio-1.22.1/
+bin/

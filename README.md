@@ -13,176 +13,140 @@
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Architecture & Design
 
 This system mirrors a real-world production environment, leveraging a microservices architecture orchestrated by Kubernetes and managed via GitOps.
 
+### Traffic Flow & Security
+
 ```mermaid
 graph TD
-    User((User)) -->|HTTPS| G[Istio Ingress Gateway]
+    User((User)) -->|HTTPS/TLS| LB[GCP Load Balancer]
+    LB -->|Anycast IP| Ingress[Istio Ingress Gateway]
     
-    subgraph "Service Mesh (Istio)"
-        G -->|/api| API[API Gateway]
-        G -->|/| Web[Storefront Service]
+    subgraph "GKE Cluster (VPC Native)"
+        Ingress -->|mTLS| Gateway[Istio Gateway]
         
-        API --> Auth[Auth Service]
-        API --> Product[Product Service]
-        API --> Cart[Cart Service]
-        API --> UserSvc[User Service]
-        API --> Offer[Offer Service]
+        subgraph "Service Mesh"
+            Gateway -->|/api| API[API Gateway]
+            Gateway -->|/| Web[Storefront]
+            
+            API -->|gRPC| Auth[Auth Service]
+            API -->|HTTP| Cart[Cart Service]
+            API -->|HTTP| Product[Product Service]
+            API -->|HTTP| Order[Order Service]
+            
+            Auth -.->|OIDC| IDP[Identity Provider]
+            
+            Order -->|Async Event| Kafka{Kafka Cluster}
+        end
         
-        Web --> API
+        subgraph "Data Persistence"
+            Cart -->|Redis Protocol| Redis[(Redis Cache)]
+            Auth -->|SQL| DB[(Cloud SQL)]
+            Product -->|SQL| DB
+        end
         
-        Cart --> Redis[(Redis Cache)]
-        Product --> DB[(PostgreSQL)]
-        UserSvc --> DB
-        
-        API -.->|Async Events| Kafka{Kafka Cluster}
-        
-        Kafka --> Analytics[Analytics Service]
-        Kafka --> Notif[Notification Service]
-        Kafka --> Audit[Audit Service]
-    end
-    
-    subgraph "Observability & Ops"
-        Prom[Prometheus]
-        Graf[Grafana]
-        Jaeg[Jaeger]
-        Argo[Argo CD]
+        subgraph "Backbone"
+            Kafka -->|Consumer Group| Analytics[Analytics Service]
+            Kafka -->|Consumer Group| Notif[Notification Service]
+        end
     end
 ```
 
-### 🌟 Key Features
+### 📐 Design Principles
 
--   **Cloud-Native**: Native integration with GKE, Cloud SQL, and Google Secret Manager.
--   **Service Mesh**: Istio for mTLS, traffic splitting, and observability.
--   **GitOps**: Argo CD for declarative continuous delivery.
--   **Event-Driven**: Kafka (KRaft mode) for asynchronous communication and analytics.
--   **Observability**: Full OpenTelemetry stack (Prometheus, Grafana, Jaeger, Loki, Tempo).
--   **Security**: OIDC Authentication, RBAC, and Network Policies.
+1.  **Twelve-Factor App**: All services are stateless, configured via environment variables, and treat backing services as attached resources.
+2.  **GitOps First**: All infrastructure and application state is defined in code. Argo CD synchronizes the cluster state with this repository.
+3.  **Zero-Trust Security**: service-to-service communication is secured via Istio mTLS. External secrets are injected via ESO (External Secrets Operator) directly from GCP Secret Manager, never stored on disk.
+4.  **Golden Signal Observability**: Every service automatically exports Latency, Traffic, Errors, and Saturation metrics to Prometheus.
+
+---
+
+## 📚 SRE Resource Center
+
+For operational guides, disaster recovery, and deep-dive troubleshooting, refer to our internal engineering documentation:
+
+| Document | Description | Target Audience |
+| :--- | :--- | :--- |
+| [**📘 GKE SRE Platform Playbook**](GKE_SRE_PLATFORM_PLAYBOOK.md) | The "Bible" for this platform. Architecture, disaster recovery, and incident response. | Staff SRE / Principal Engineers |
+| [**🔧 Deployment Troubleshooting**](deployment-troubleshooting.md) | Archive of resolved deployment issues and their fixes (Airflow, Loki, Helm). | On-Call Engineers |
+| [**🐞 Metabase Deep Dive**](metabase-sre-analysis.md) | Analysis of complex pod scheduling and probe failure scenarios. | DevOps / SRE |
+| [**🕸️ Kafka Operations**](kafka-troubleshooting.md) | Guide to Strimzi operator, KRaft mode, and restoring split-brain clusters. | Data Engineers |
 
 ---
 
 ## 🧩 Microservices
 
-| Service                  | Description                                      | Tech Stack |
-| ------------------------ | ------------------------------------------------ | ---------- |
-| **api-gateway**          | Unified entry point, routing, and aggregation.   | Go, Fiber  |
-| **auth-service**         | User authentication & JWT token generation.      | Go, OAuth2 |
-| **product-service**      | Catalog management and inventory tracking.       | Go, gRPC   |
-| **cart-service**         | Shopping cart management with Redis persistence. | Go, Redis  |
-| **user-service**         | User profile and preferences management.         | Go, SQL    |
-| **offer-service**        | Dynamic pricing and discount engine.             | Go         |
-| **storefront-service**   | Server-side rendered frontend UI.                | Go, HTML   |
-| **analytics-ingest**     | Ingests user behavior events into data pipeline. | Go, Kafka  |
-| **notification-service** | Sends emails/SMS based on Kafka events.          | Go         |
-| **audit-service**        | Compliance logging for all critical actions.     | Go         |
-| **admin-backoffice**     | Internal admin dashboard for managing platform.  | Go, React  |
+| Service | Port | Protocol | Description | Dependencies |
+| :--- | :--- | :--- | :--- | :--- |
+| **api-gateway** | `8080` | HTTP | Unified entry point, routing, and aggregation. | Auth, Product, Cart |
+| **auth-service** | `50051` | gRPC | User authentication & JWT token generation. | PostgreSQL |
+| **product-service** | `50051` | gRPC | Catalog management and inventory tracking. | PostgreSQL |
+| **cart-service** | `7070` | HTTP | Shopping cart management. | Redis |
+| **offer-service** | `50051` | gRPC | Dynamic pricing and discount engine. | None |
+| **analytics-ingest** | `8080` | HTTP | Ingests user behavior events. | Kafka |
+| **audit-service** | `--` | Kafka | Compliance logging for all critical actions. | Kafka |
 
 ---
 
 ## 🚀 Installation & Setup
 
-### prerequisites
+### 1. Prerequisites (GCP)
 
-Ensure you have the following installed:
-
--   [Go 1.22+](https://go.dev/dl/)
--   [Docker & Docker Compose](https://www.docker.com/)
--   [Terraform 1.6+](https://developer.hashicorp.com/terraform/install)
--   [kubectl](https://kubernetes.io/docs/tasks/tools/)
--   [Google Cloud SDK](https://cloud.google.com/sdk/docs/install)
-
-### 💻 Option 1: Local Development (Docker Compose)
-
-Run the supporting infrastructure locally for development. Note that this starts the data and observability layers; microservices should be run individually using Go or your IDE.
-
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup.git
-    cd ecommerce-platform
-    ```
-
-2.  **Start Infrastructure (Postgres, Redis, Kafka, Observability):**
-    ```bash
-    docker-compose up -d
-    ```
-
-3.  **Run Services:**
-    You can run individual services using `go run`. For example:
-    ```bash
-    cd services/storefront-service
-    go run main.go
-    ```
-
-4.  **Access Infrastructure:**
-    -   **Grafana**: [http://localhost:3000](http://localhost:3000) (admin/admin)
-    -   **Jaeger**: [http://localhost:16686](http://localhost:16686)
-    -   **Kafka UI** (if configured): [http://localhost:8080](http://localhost:8080)
-
-### ☁️ Option 2: Production Deployment (GKE/Terraform)
-
-Deploy to Google Cloud using Terraform and GitOps.
-
-1.  **Initialize Infrastructure:**
-    ```bash
-    cd infra/terraform
-    terraform init
-    terraform apply -var="project_id=YOUR_PROJECT_ID"
-    ```
-
-2.  **Connect to Cluster:**
-    ```bash
-    gcloud container clusters get-credentials main-cluster --region us-central1
-    ```
-
-3.  **Install Argo CD:**
-    ```bash
-    kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-    ```
-
-4.  **Sync Applications:**
-    Apply the App of Apps pattern to deploy all microservices.
-    ```bash
-    kubectl apply -f argocd/applications/app-of-apps.yaml
-    ```
-
----
-
-## 🛠️ Development & Contributing
-
-### Running Tests
-We use standard Go testing. To run unit tests across all services:
+Before deploying to GKE, you **MUST** enable the following APIs and prepare your environment.
 
 ```bash
-make test
+# Enable required GCP APIs
+gcloud services enable \
+    container.googleapis.com \
+    compute.googleapis.com \
+    secretmanager.googleapis.com \
+    artifactregistry.googleapis.com \
+    iam.googleapis.com
 ```
 
-### Building Images
-To build Docker images for all services:
+### 2. Bootstrap Identity (Workload Identity)
+
+This platform uses Workload Identity Federation. You must bind the Kubernetes Service Accounts to GCP IAM Service Accounts.
 
 ```bash
-make docker-build
+# Example: Allow External Secrets Operator to read from Secret Manager
+gcloud iam service-accounts add-iam-policy-binding \
+    external-secrets@${PROJECT_ID}.iam.gserviceaccount.com \
+    --role roles/iam.workloadIdentityUser \
+    --member "serviceAccount:${PROJECT_ID}.svc.id.goog[external-secrets/external-secrets]"
 ```
 
-### Linting
-Ensure code quality before committing:
+### 3. Deployment Options
+
+#### ☁️ Option A: Production (Terraform + GKE)
+
+1.  **Infrastructure**: `cd infra/terraform && terraform apply`
+2.  **GitOps**: `kubectl apply -f argocd/install.yaml`
+3.  **Sync**: `kubectl apply -f argocd/applications/app-of-apps.yaml`
+
+#### 💻 Option B: Local Development (Docker Compose)
+
+Run the platform locally for testing.
 
 ```bash
-make lint
+docker-compose up -d --build
 ```
+> **Note**: Local development uses standard Kafka and local Postgres. It does not replicate GKE networking or IAM policies.
 
 ---
 
 ## 📊 Observability
 
-The platform comes with a pre-configured observability stack.
+Accurate observability is critical for SRE operations. Access the dashboards via port-forwarding:
 
--   **Grafana**: Metrics visualization and dashboards.
--   **Prometheus**: Metrics collection.
--   **Loki**: Log aggregation.
--   **Tempo**: Distributed tracing.
--   **Kiali**: Service mesh visualization.
+| Tool | URL | Credentials | Purpose |
+| :--- | :--- | :--- | :--- |
+| **Grafana** | `localhost:3000` | `admin`/`admin` | Metrics & Dashboards |
+| **Prometheus** | `localhost:9090` | None | Raw Metrics Query |
+| **Jaeger** | `localhost:16686` | None | Distributed Tracing |
+| **Kiali** | `localhost:20001` | `admin`/`admin` | Mesh Visualization |
 
 ---
 
