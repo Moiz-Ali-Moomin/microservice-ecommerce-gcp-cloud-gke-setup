@@ -15,11 +15,18 @@ spec:
     onFailureRetries: 3
     onFailureRetryInterval: 10
     onSubmissionFailureRetries: 5
+  volumes:
+    - name: spark-jobs
+      configMap:
+        name: spark-jobs
   driver:
     cores: 1
     coreLimit: "1000m"
     memory: "512m"
     serviceAccount: spark-sa
+    volumeMounts:
+      - name: spark-jobs
+        mountPath: /opt/spark/jobs
     env:
       - name: DB_URL
         value: jdbc:postgresql://postgres-primary.data-postgres.svc.cluster.local:5432/ecommerce_db
@@ -37,6 +44,9 @@ spec:
     cores: 1
     instances: 2
     memory: "1024m"
+    volumeMounts:
+      - name: spark-jobs
+        mountPath: /opt/spark/jobs
     env:
       - name: DB_URL
         value: jdbc:postgresql://postgres-primary.data-postgres.svc.cluster.local:5432/ecommerce_db

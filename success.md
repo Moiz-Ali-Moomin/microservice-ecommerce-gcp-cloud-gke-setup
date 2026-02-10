@@ -208,8 +208,46 @@ Test routes:
 
 ---
 
+## 9. Current Service Issues (Active Troubleshooting)
+
+The following services are currently under active remediation:
+
+### 9.1 Metabase (`tooling-metabase`)
+*   **Status**: `Stabilizing / Initializing`
+*   **Root Cause**: Mismatched taints (`workload=analytics`) and aggressive liveness probes during long migrations.
+*   **Fix**: Applied SRE-hardened manifest with `startupProbes`, `initContainers`, and proper `tolerations`.
+*   **Action**: Wait ~10 minutes for Clojure startup and DB migrations to complete.
+
+### 9.2 Spark Job (`apps-async`)
+*   **Status**: `Stuck / Pending`
+*   **Root Cause**: Spark Operator is restricted to the `default` namespace and doesn't watch `apps-async`.
+*   **Fix**: Patching operator deployment to remove `--namespaces=default` argument and enable global watching.
+*   **Action**: Re-trigger `SparkApplication` after operator restart.
+
+---
+
+## 9. Current Service Issues (Active Troubleshooting)
+
+The following services are currently under active remediation:
+
+### 9.1 Metabase (`tooling-metabase`)
+*   **Status**: `Stabilizing / Initializing`
+*   **Root Cause**: Mismatched taints (`workload=analytics`) and aggressive liveness probes during long migrations.
+*   **Fix**: Applied SRE-hardened manifest with `startupProbes`, `initContainers`, and proper `tolerations`.
+*   **Action**: Wait ~10 minutes for Clojure startup and DB migrations to complete.
+
+### 9.2 Spark Job (`apps-async`)
+*   **Status**: `Stuck / Pending`
+*   **Root Cause**: Spark Operator is restricted to the `default` namespace and doesn't watch `apps-async`.
+*   **Fix**: Patching operator deployment to remove `--namespaces=default` argument and enable global watching.
+*   **Action**: Re-trigger `SparkApplication` after operator restart.
+
+---
+
 ## 🛑 Troubleshooting Summary
 If you encounter issues, check `deployment-troubleshooting.md` in the `brain/` directory for detailed root cause analysis of:
 - Helper chart values vs Manifests
 - IAM Permission Denied errors
 - Istio CrashLoopBackOffs
+- Service-specific configuration mismatches
+- Service-specific configuration mismatches
