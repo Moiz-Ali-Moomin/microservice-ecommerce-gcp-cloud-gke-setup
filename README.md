@@ -1,4 +1,5 @@
-# 🛒 Cloud-Native E-Commerce Platform
+# 🛒 Cloud-Native E-Commerce Platform  
+### Production-Grade Microservices on GKE with Terraform, GitOps & Service Mesh
 
 ![Build Status](https://img.shields.io/github/actions/workflow/status/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/?style=for-the-badge&logo=github)
 ![Go Version](https://img.shields.io/github/go-mod/go-version/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup?style=for-the-badge&logo=go)
@@ -8,148 +9,372 @@
 ![Istio](https://img.shields.io/badge/Service_Mesh-Istio-466BB0?style=for-the-badge&logo=istio)
 ![Argo CD](https://img.shields.io/badge/GitOps-Argo_CD-EF7B4D?style=for-the-badge&logo=argo)
 
-> **Enterprise-grade, distributed e-commerce platform built for scale.**
-> Designed with a focus on **high availability**, **observability**, and **GitOps principles**. Fully deployable on Google Kubernetes Engine (GKE) or locally via Docker Compose.
+---
+
+## 🎯 Executive Summary
+
+This project simulates a real-world enterprise e-commerce platform engineered using modern cloud-native and SRE best practices.
+
+It demonstrates:
+
+- Infrastructure as Code (Terraform)
+- GitOps-driven continuous delivery (Argo CD)
+- Zero-trust service mesh security (Istio mTLS)
+- Event-driven distributed systems (Kafka)
+- Golden Signal observability (Prometheus, Grafana, Tempo, Loki)
+- Production-grade Kubernetes operations on GKE
+
+This repository reflects platform engineering ownership — not just application deployment.
 
 ---
 
-## 🏗️ Architecture & Design
+# 🗺️ Architecture Overview
 
-This system mirrors a real-world production environment, leveraging a microservices architecture orchestrated by Kubernetes and managed via GitOps.
-
-### Traffic Flow & Security
+## Traffic Flow
 
 ```mermaid
 graph TD
-    User((User)) -->|HTTPS/TLS| LB[GCP Load Balancer]
-    LB -->|Anycast IP| Ingress[Istio Ingress Gateway]
-    
-    subgraph "GKE Cluster (VPC Native)"
-        Ingress -->|mTLS| Gateway[Istio Gateway]
-        
-        subgraph "Service Mesh"
-            Gateway -->|/api| API[API Gateway]
-            Gateway -->|/| Web[Storefront]
-            
-            API -->|gRPC| Auth[Auth Service]
-            API -->|HTTP| Cart[Cart Service]
-            API -->|HTTP| Product[Product Service]
-            API -->|HTTP| Order[Order Service]
-            
-            Auth -.->|OIDC| IDP[Identity Provider]
-            
-            Order -->|Async Event| Kafka{Kafka Cluster}
-        end
-        
-        subgraph "Data Persistence"
-            Cart -->|Redis Protocol| Redis[(Redis Cache)]
-            Auth -->|SQL| DB[(Cloud SQL)]
-            Product -->|SQL| DB
-        end
-        
-        subgraph "Backbone"
-            Kafka -->|Consumer Group| Analytics[Analytics Service]
-            Kafka -->|Consumer Group| Notif[Notification Service]
-        end
+    User((User)) -->|HTTPS| LB[GCP Load Balancer]
+    LB --> Ingress[Istio Ingress Gateway]
+
+    subgraph "GKE Cluster"
+        Ingress -->|mTLS| API[API Gateway]
+
+        API --> Auth[Auth Service]
+        API --> Product[Product Service]
+        API --> Cart[Cart Service]
+        API --> Order[Order Service]
+
+        Order --> Kafka{Kafka}
+
+        Auth --> Postgres[(Cloud SQL)]
+        Product --> Postgres
+        Cart --> Redis[(Redis)]
     end
 ```
 
-### 📐 Design Principles
+---
 
-1.  **Twelve-Factor App**: All services are stateless, configured via environment variables, and treat backing services as attached resources.
-2.  **GitOps First**: All infrastructure and application state is defined in code. Argo CD synchronizes the cluster state with this repository.
-3.  **Zero-Trust Security**: service-to-service communication is secured via Istio mTLS. External secrets are injected via ESO (External Secrets Operator) directly from GCP Secret Manager, never stored on disk.
-4.  **Golden Signal Observability**: Every service automatically exports Latency, Traffic, Errors, and Saturation metrics to Prometheus.
+# 🧠 Architectural Principles
+
+- Twelve-Factor App compliant
+- Declarative GitOps-driven deployments
+- Zero-trust internal traffic (mTLS)
+- Secrets managed via GCP Secret Manager
+- Observability-first design
+- Independent microservice scaling
+- Event-driven backbone via Kafka
 
 ---
 
-## 📚 SRE Resource Center
+# 🚀 Full Production Deployment Guide (GKE)
 
-For operational guides, disaster recovery, and deep-dive troubleshooting, refer to our internal engineering documentation:
+## 🛠️ Prerequisites
 
-| Document | Description | Target Audience |
-| :--- | :--- | :--- |
-| [**📘 GKE SRE Platform Playbook**](GKE_SRE_PLATFORM_PLAYBOOK.md) | The "Bible" for this platform. Architecture, disaster recovery, and incident response. | Staff SRE / Principal Engineers |
-| [**🔧 Deployment Troubleshooting**](deployment-troubleshooting.md) | Archive of resolved deployment issues and their fixes (Airflow, Loki, Helm). | On-Call Engineers |
-| [**🐞 Metabase Deep Dive**](metabase-sre-analysis.md) | Analysis of complex pod scheduling and probe failure scenarios. | DevOps / SRE |
-| [**🕸️ Kafka Operations**](kafka-troubleshooting.md) | Guide to Strimzi operator, KRaft mode, and restoring split-brain clusters. | Data Engineers |
+### Required Tools
 
----
+- gcloud
+- terraform
+- kubectl
+- helm
+- istioctl
 
-## 🧩 Microservices
+### Required Access
 
-| Service | Port | Protocol | Description | Dependencies |
-| :--- | :--- | :--- | :--- | :--- |
-| **api-gateway** | `8080` | HTTP | Unified entry point, routing, and aggregation. | Auth, Product, Cart |
-| **auth-service** | `50051` | gRPC | User authentication & JWT token generation. | PostgreSQL |
-| **product-service** | `50051` | gRPC | Catalog management and inventory tracking. | PostgreSQL |
-| **cart-service** | `7070` | HTTP | Shopping cart management. | Redis |
-| **offer-service** | `50051` | gRPC | Dynamic pricing and discount engine. | None |
-| **analytics-ingest** | `8080` | HTTP | Ingests user behavior events. | Kafka |
-| **audit-service** | `--` | Kafka | Compliance logging for all critical actions. | Kafka |
+- GCP Project Owner or Editor role
 
 ---
 
-## 🚀 Installation & Setup
+# 1️⃣ Infrastructure Provisioning (Terraform)
 
-### 1. Prerequisites (GCP)
+Navigate to:
 
-Before deploying to GKE, you **MUST** enable the following APIs and prepare your environment.
-
-```bash
-# Enable required GCP APIs
-gcloud services enable \
-    container.googleapis.com \
-    compute.googleapis.com \
-    secretmanager.googleapis.com \
-    artifactregistry.googleapis.com \
-    iam.googleapis.com
+```
+infra/terraform/gcp
 ```
 
-### 2. Bootstrap Identity (Workload Identity)
-
-This platform uses Workload Identity Federation. You must bind the Kubernetes Service Accounts to GCP IAM Service Accounts.
+## 1.1 Bootstrap Identity & Backend
 
 ```bash
-# Example: Allow External Secrets Operator to read from Secret Manager
-gcloud iam service-accounts add-iam-policy-binding \
-    external-secrets@${PROJECT_ID}.iam.gserviceaccount.com \
-    --role roles/iam.workloadIdentityUser \
-    --member "serviceAccount:${PROJECT_ID}.svc.id.goog[external-secrets/external-secrets]"
+cd bootstrap-identity
+terraform init
+terraform apply -var="project_id=<YOUR_PROJECT_ID>"
 ```
 
-### 3. Deployment Options
+This sets up:
 
-#### ☁️ Option A: Production (Terraform + GKE)
+- Workload Identity Federation
+- GCS Terraform backend
+- IAM bindings for External Secrets
 
-1.  **Infrastructure**: `cd infra/terraform && terraform apply`
-2.  **GitOps**: `kubectl apply -f argocd/install.yaml`
-3.  **Sync**: `kubectl apply -f argocd/applications/app-of-apps.yaml`
+---
 
-#### 💻 Option B: Local Development (Docker Compose)
+## 1.2 Provision Secrets Manager
 
-Run the platform locally for testing.
+```bash
+cd ../secrets
+terraform apply
+```
+
+---
+
+## 1.3 Provision GKE Cluster
+
+```bash
+cd ../gke
+terraform apply
+```
+
+---
+
+# 2️⃣ Connect to Cluster
+
+```bash
+gcloud container clusters get-credentials ecommerce-cluster --region <REGION>
+```
+
+---
+
+# 3️⃣ Base Platform Services
+
+## 3.1 External Secrets Operator
+
+```bash
+helm repo add external-secrets https://charts.external-secrets.io
+helm install external-secrets external-secrets/external-secrets \
+    -n external-secrets --create-namespace \
+    --set installCRDs=true
+```
+
+Apply ClusterSecretStore:
+
+```bash
+kubectl apply -f infra/external-secrets/cluster-secret-store.yaml
+```
+
+---
+
+## 3.2 Kafka (Strimzi Operator)
+
+```bash
+kubectl create namespace kafka
+kubectl apply -f infra/kafka/operator/strimzi-install.yaml
+kubectl apply -f infra/kafka/cluster/kafka.yaml
+```
+
+Kafka runs in KRaft mode.
+
+---
+
+# 4️⃣ Databases
+
+## PostgreSQL
+
+```bash
+helm install postgres bitnami/postgresql \
+    -n data-postgres --create-namespace \
+    -f infra/databases/postgres/values.yaml \
+    --set metrics.serviceMonitor.enabled=false
+```
+
+## Redis
+
+```bash
+helm install redis bitnami/redis \
+    -n data-redis --create-namespace \
+    -f infra/databases/redis/values.yaml \
+    --set metrics.serviceMonitor.enabled=false
+```
+
+---
+
+# 5️⃣ Deploy Microservices
+
+## Sync Secrets First
+
+```bash
+kubectl apply -f infra/secrets/
+kubectl apply -f infra/app-secrets/
+```
+
+## Deploy Services
+
+Example:
+
+```bash
+helm upgrade --install auth-service services/auth-service/helm \
+    -n apps-core --create-namespace \
+    -f services/auth-service/helm/values.yaml
+```
+
+Repeat for:
+
+- product-service
+- cart-service
+- order-service
+- api-gateway
+- analytics services
+
+---
+
+# 6️⃣ Install Istio Service Mesh
+
+## Control Plane
+
+```bash
+istioctl install --set profile=minimal -y
+```
+
+## Ingress Gateway
+
+```bash
+kubectl apply -f infra/istio/gateway-workload/
+```
+
+## Routing Configuration
+
+```bash
+kubectl apply -f infra/istio/ingress/
+kubectl apply -f infra/istio/ingress/virtual-services/
+```
+
+---
+
+# 7️⃣ Observability Stack
+
+## Add Helm Repos
+
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+```
+
+---
+
+## Deploy Monitoring Components
+
+### Prometheus
+
+```bash
+helm upgrade --install prometheus prometheus-community/prometheus \
+    -n platform-observability --create-namespace \
+    -f infra/observability/prometheus/values.yaml
+```
+
+### Loki (Logs)
+
+```bash
+helm upgrade --install loki grafana/loki \
+    -n platform-observability \
+    -f infra/observability/loki/values.yaml
+```
+
+### Tempo (Tracing)
+
+```bash
+helm upgrade --install tempo grafana/tempo \
+    -n platform-observability \
+    -f infra/observability/tempo/values.yaml
+```
+
+### Grafana
+
+```bash
+helm upgrade --install grafana grafana/grafana \
+    -n platform-observability \
+    -f infra/observability/grafana/values.yaml
+```
+
+---
+
+# ✅ Verification
+
+Check all pods:
+
+```bash
+kubectl get pods -A
+```
+
+All services should be `Running`.
+
+Get public ingress IP:
+
+```bash
+kubectl get svc -n istio-system istio-ingressgateway
+```
+
+Test endpoints:
+
+- http://<IP>/
+- http://<IP>/api-gateway/health
+- http://<IP>/product
+
+---
+
+# 🧩 Known Active Remediation Cases
+
+### Metabase
+- Slow initialization due to DB migrations
+- Uses startupProbes and tolerations
+- Wait ~10 minutes for stabilization
+
+### Spark Job
+- Operator namespace scoping issue
+- Requires patching deployment to watch all namespaces
+
+---
+
+# 💻 Local Development
 
 ```bash
 docker-compose up -d --build
 ```
-> **Note**: Local development uses standard Kafka and local Postgres. It does not replicate GKE networking or IAM policies.
+
+Includes:
+
+- Kafka
+- PostgreSQL
+- Redis
+- All services
+
+Note: Local environment does not replicate IAM or mesh-level security.
 
 ---
 
-## 📊 Observability
+# 📈 Scalability & Reliability Features
 
-Accurate observability is critical for SRE operations. Access the dashboards via port-forwarding:
-
-| Tool | URL | Credentials | Purpose |
-| :--- | :--- | :--- | :--- |
-| **Grafana** | `localhost:3000` | `admin`/`admin` | Metrics & Dashboards |
-| **Prometheus** | `localhost:9090` | None | Raw Metrics Query |
-| **Jaeger** | `localhost:16686` | None | Distributed Tracing |
-| **Kiali** | `localhost:20001` | `admin`/`admin` | Mesh Visualization |
+- Horizontal Pod Autoscaling
+- Rolling deployments
+- Circuit breaking (Istio)
+- Event partition scaling
+- Health probes
+- Distributed tracing
+- Metrics-based monitoring
 
 ---
 
-## 📄 License
+# 🔐 Security Model
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+- Istio mTLS encryption
+- IAM Workload Identity
+- No static secrets in repo
+- Namespace isolation
+- Least privilege IAM
+
+---
+
+# 🎯 What This Project Demonstrates
+
+- End-to-end platform ownership
+- Secure cloud-native architecture
+- GitOps-driven continuous delivery
+- Distributed event-driven design
+- SRE-grade observability
+- Infrastructure automation at scale
+
+---
+
+# 📄 License
+
+MIT License — see LICENSE file.
