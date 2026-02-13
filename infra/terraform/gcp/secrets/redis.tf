@@ -1,5 +1,6 @@
-resource "google_secret_manager_secret" "redis_password" {
-  secret_id = "redis-password"
+resource "google_secret_manager_secret" "redis_secret" {
+  secret_id = "redis-secret"   # ← FIXED NAME
+
   labels = merge(local.common_labels, {
     service = "redis"
   })
@@ -9,7 +10,7 @@ resource "google_secret_manager_secret" "redis_password" {
   }
 }
 
-resource "google_secret_manager_secret_version" "redis_password" {
-  secret      = google_secret_manager_secret.redis_password.id
+resource "google_secret_manager_secret_version" "redis_secret" {
+  secret      = google_secret_manager_secret.redis_secret.id
   secret_data = var.redis_password
 }

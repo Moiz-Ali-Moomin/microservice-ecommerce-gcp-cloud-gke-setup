@@ -14,4 +14,4 @@ spec:
   data:
     - secretKey: clickbank-secret-key
       remoteRef:
-        key: clickbank-secret-key
+        key: conversion-webhook

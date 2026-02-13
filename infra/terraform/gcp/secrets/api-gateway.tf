@@ -1,5 +1,6 @@
 resource "google_secret_manager_secret" "api_gateway_postgres_dsn" {
-  secret_id = "api-gateway-postgres-dsn"
+  secret_id = "api-gateway-db"   # ← FIXED NAME
+
   labels = merge(local.common_labels, {
     service = "api-gateway"
   })

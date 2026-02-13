@@ -1,5 +1,6 @@
-resource "google_secret_manager_secret" "clickbank_secret_key" {
-  secret_id = "clickbank-secret-key"
+resource "google_secret_manager_secret" "conversion_webhook" {
+  secret_id = "conversion-webhook"   # ← FIXED NAME
+
   labels = merge(local.common_labels, {
     service = "conversion-webhook"
   })
@@ -9,7 +10,7 @@ resource "google_secret_manager_secret" "clickbank_secret_key" {
   }
 }
 
-resource "google_secret_manager_secret_version" "clickbank_secret_key" {
-  secret      = google_secret_manager_secret.clickbank_secret_key.id
+resource "google_secret_manager_secret_version" "conversion_webhook" {
+  secret      = google_secret_manager_secret.conversion_webhook.id
   secret_data = var.clickbank_secret_key
 }

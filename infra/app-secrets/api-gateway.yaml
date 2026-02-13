@@ -14,4 +14,4 @@ spec:
   data:
     - secretKey: POSTGRES_DSN
       remoteRef:
-        key: api-gateway-postgres-dsn
+        key: api-gateway-db

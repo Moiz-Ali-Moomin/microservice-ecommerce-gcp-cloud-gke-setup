@@ -14,10 +14,7 @@ spec:
   data:
     - secretKey: db-password
       remoteRef:
-        key: postgres-app-password
-    - secretKey: db-user
-      remoteRef:
-        key: auth-db-user
+        key: auth-service-db
 
 ---
 apiVersion: external-secrets.io/v1
@@ -36,7 +33,7 @@ spec:
   data:
     - secretKey: REDIS_PASSWORD
       remoteRef:
-        key: redis-password
+        key: auth-service-redis
 
 ---
 apiVersion: external-secrets.io/v1
@@ -55,4 +52,4 @@ spec:
   data:
     - secretKey: JWT_SECRET
       remoteRef:
-        key: auth-jwt-secret
+        key: auth-service-jwt
