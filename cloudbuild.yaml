@@ -1,0 +1,76 @@
+steps:
+  # Auth Service
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'auth-service'
+    waitFor: ['-']
+    args:
+      [
+        'build',
+        '--build-arg', 'SERVICE_NAME=auth-service',
+        '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/ecommerce-repo/auth-service:$COMMIT_SHA',
+        '-f', 'Dockerfile.services',
+        '.'
+      ]
+
+  # API Gateway
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'api-gateway'
+    waitFor: ['-']
+    args:
+      [
+        'build',
+        '--build-arg', 'SERVICE_NAME=api-gateway',
+        '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/ecommerce-repo/api-gateway:$COMMIT_SHA',
+        '-f', 'Dockerfile.services',
+        '.'
+      ]
+
+  # Product Service
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'product-service'
+    waitFor: ['-']
+    args:
+      [
+        'build',
+        '--build-arg', 'SERVICE_NAME=product-service',
+        '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/ecommerce-repo/product-service:$COMMIT_SHA',
+        '-f', 'Dockerfile.services',
+        '.'
+      ]
+
+  # Cart Service
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'cart-service'
+    waitFor: ['-']
+    args:
+      [
+        'build',
+        '--build-arg', 'SERVICE_NAME=cart-service',
+        '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/ecommerce-repo/cart-service:$COMMIT_SHA',
+        '-f', 'Dockerfile.services',
+        '.'
+      ]
+
+  # Order Service
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'order-service'
+    waitFor: ['-']
+    args:
+      [
+        'build',
+        '--build-arg', 'SERVICE_NAME=order-service',
+        '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/ecommerce-repo/order-service:$COMMIT_SHA',
+        '-f', 'Dockerfile.services',
+        '.'
+      ]
+
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/ecommerce-repo/auth-service:$COMMIT_SHA'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/ecommerce-repo/api-gateway:$COMMIT_SHA'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/ecommerce-repo/product-service:$COMMIT_SHA'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/ecommerce-repo/cart-service:$COMMIT_SHA'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/ecommerce-repo/order-service:$COMMIT_SHA'
+
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
