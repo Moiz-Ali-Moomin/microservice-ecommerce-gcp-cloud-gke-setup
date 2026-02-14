@@ -3,7 +3,7 @@ module github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/ser
 go 1.24.0
 
 require (
-	github.com/IBM/sarama v1.43.2
+	github.com/IBM/sarama v1.46.3
 	github.com/google/uuid v1.6.0
 	github.com/prometheus/client_golang v1.20.4
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.52.0
@@ -26,8 +26,6 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.3 // indirect
-	github.com/hashicorp/errwrap v1.0.0 // indirect
-	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
