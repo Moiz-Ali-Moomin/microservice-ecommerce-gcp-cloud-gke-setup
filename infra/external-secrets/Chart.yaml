@@ -1,9 +1,8 @@
 apiVersion: v2
 name: external-secrets-wrapper
-description: Wrapper chart for External Secrets Operator
+description: External Secrets Operator wrapper
 type: application
 version: 1.0.0
-appVersion: "0.9.13"
 
 dependencies:
   - name: external-secrets

@@ -1,18 +1,36 @@
-external-secrets:
-  installCRDs: true   # keep if this is first install
+# External Secrets Operator production configuration for GKE + Workload Identity
 
+external-secrets:
+
+  # Install CRDs automatically (required for fresh clusters)
+  installCRDs: true
+
+  # Core controller configuration
+  replicaCount: 1
+
+  image:
+    pullPolicy: IfNotPresent
+
+  # Kubernetes ServiceAccount linked to GCP ServiceAccount (CRITICAL)
   serviceAccount:
     create: true
-    name: external-secrets-sa
+    name: external-secrets
     annotations:
-      iam.gke.io/gcp-service-account: "secrets-reader@ecommerce-microservice-53.iam.gserviceaccount.com"
+      iam.gke.io/gcp-service-account: secrets-reader@ecommerce-microservice-53.iam.gserviceaccount.com
 
+  # Webhook configuration (required for validation and conversion)
   webhook:
     create: true
+    replicaCount: 1
+    failurePolicy: Ignore
+    port: 9443
 
+  # Certificate controller (generates TLS certs automatically)
   certController:
     create: true
+    replicaCount: 1
 
+  # Resource limits (production-safe defaults)
   resources:
     requests:
       cpu: 100m
@@ -21,10 +39,39 @@ external-secrets:
       cpu: 500m
       memory: 512Mi
 
-  podDisruptionBudget:
+  # Pod security context
+  podSecurityContext:
     enabled: true
-    minAvailable: 1
+    fsGroup: 65534
 
-# Only values that are ACTUALLY used by templates
+  securityContext:
+    enabled: true
+    runAsNonRoot: true
+    runAsUser: 65534
+
+  # Leader election for HA safety
+  leaderElect: true
+
+  # Logging
+  logLevel: info
+
+  # Metrics (enable if using Prometheus)
+  metrics:
+    enabled: true
+    service:
+      enabled: true
+      port: 8080
+
+  # Node scheduling (optional but recommended)
+  nodeSelector: {}
+
+  tolerations: []
+
+  affinity: {}
+
+# Custom config for your GCP environment (used by your templates)
 gcp:
   projectId: ecommerce-microservice-53
+  clusterName: ecommerce-platform-prod
+  clusterLocation: us-central1
+  serviceAccountEmail: secrets-reader@ecommerce-microservice-53.iam.gserviceaccount.com

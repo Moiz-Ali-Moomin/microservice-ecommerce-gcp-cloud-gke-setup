@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: platform-istio
+  name: istio-system
   labels:
     istio-injection: disabled
     pod-security.kubernetes.io/enforce: baseline
