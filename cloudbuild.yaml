@@ -1,76 +1,35 @@
 steps:
-  # Auth Service
   - name: 'gcr.io/cloud-builders/docker'
-    id: 'auth-service'
-    waitFor: ['-']
+    entrypoint: 'bash'
+    env:
+      - DOCKER_BUILDKIT=1
     args:
-      [
-        'build',
-        '--build-arg', 'SERVICE_NAME=auth-service',
-        '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/ecommerce-repo/auth-service:$COMMIT_SHA',
-        '-f', 'Dockerfile.services',
-        '.'
-      ]
+      - '-c'
+      - |
+        set -e
+        echo "Detecting all microservices..."
 
-  # API Gateway
-  - name: 'gcr.io/cloud-builders/docker'
-    id: 'api-gateway'
-    waitFor: ['-']
-    args:
-      [
-        'build',
-        '--build-arg', 'SERVICE_NAME=api-gateway',
-        '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/ecommerce-repo/api-gateway:$COMMIT_SHA',
-        '-f', 'Dockerfile.services',
-        '.'
-      ]
+        for SERVICE in $$(find services -mindepth 1 -maxdepth 1 -type d -exec basename {} \;); do
 
-  # Product Service
-  - name: 'gcr.io/cloud-builders/docker'
-    id: 'product-service'
-    waitFor: ['-']
-    args:
-      [
-        'build',
-        '--build-arg', 'SERVICE_NAME=product-service',
-        '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/ecommerce-repo/product-service:$COMMIT_SHA',
-        '-f', 'Dockerfile.services',
-        '.'
-      ]
+          # Skip shared-lib AND go.work (or any other non-service dirs)
+          if [[ "$$SERVICE" == "shared-lib" || "$$SERVICE" == "go.work" ]]; then
+            echo "Skipping $$SERVICE"
+            continue
+          fi
 
-  # Cart Service
-  - name: 'gcr.io/cloud-builders/docker'
-    id: 'cart-service'
-    waitFor: ['-']
-    args:
-      [
-        'build',
-        '--build-arg', 'SERVICE_NAME=cart-service',
-        '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/ecommerce-repo/cart-service:$COMMIT_SHA',
-        '-f', 'Dockerfile.services',
-        '.'
-      ]
+          IMAGE="us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo/$${SERVICE}:latest"
 
-  # Order Service
-  - name: 'gcr.io/cloud-builders/docker'
-    id: 'order-service'
-    waitFor: ['-']
-    args:
-      [
-        'build',
-        '--build-arg', 'SERVICE_NAME=order-service',
-        '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/ecommerce-repo/order-service:$COMMIT_SHA',
-        '-f', 'Dockerfile.services',
-        '.'
-      ]
+          echo "========================================="
+          echo "Building and pushing: $$SERVICE"
+          echo "========================================="
 
-images:
-  - 'us-central1-docker.pkg.dev/$PROJECT_ID/ecommerce-repo/auth-service:$COMMIT_SHA'
-  - 'us-central1-docker.pkg.dev/$PROJECT_ID/ecommerce-repo/api-gateway:$COMMIT_SHA'
-  - 'us-central1-docker.pkg.dev/$PROJECT_ID/ecommerce-repo/product-service:$COMMIT_SHA'
-  - 'us-central1-docker.pkg.dev/$PROJECT_ID/ecommerce-repo/cart-service:$COMMIT_SHA'
-  - 'us-central1-docker.pkg.dev/$PROJECT_ID/ecommerce-repo/order-service:$COMMIT_SHA'
+          docker build \
+            --build-arg SERVICE_NAME=$${SERVICE} \
+            -t $${IMAGE} \
+            -f Dockerfile.services .
 
-options:
-  machineType: 'E2_HIGHCPU_8'
-  logging: CLOUD_LOGGING_ONLY
+          docker push $${IMAGE}
+
+        done
+
+        echo "All microservices built and pushed successfully."

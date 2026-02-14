@@ -1,120 +1,62 @@
 # syntax=docker/dockerfile:1
 
 # ============================================================================
-# UNIFIED GO MICROSERVICES BUILDER - Production Grade (FIXED)
+# DYNAMIC MULTI-SERVICE BUILDER - Production Grade
 # ============================================================================
 
-# ----------------------------------------------------------------------------
-# DEPS STAGE — download deps once, cache hard
-# ----------------------------------------------------------------------------
-FROM golang:1.24.0-bookworm AS deps
+# STAGE 1: Builder
+# Optimized for caching and workspace-aware Go builds
+FROM golang:1.24.0-bookworm AS builder
 
+# Set current working directory
 WORKDIR /app
 
-# Copy go.mod / go.sum ONLY (max cache hit)
-COPY services/shared-lib/go.mod services/shared-lib/go.sum ./services/shared-lib/
-COPY services/admin-backoffice-service/go.mod services/admin-backoffice-service/go.sum ./services/admin-backoffice-service/
-COPY services/analytics-ingest-service/go.mod services/analytics-ingest-service/go.sum ./services/analytics-ingest-service/
-COPY services/api-gateway/go.mod services/api-gateway/go.sum ./services/api-gateway/
-COPY services/attribution-service/go.mod services/attribution-service/go.sum ./services/attribution-service/
-COPY services/audit-service/go.mod services/audit-service/go.sum ./services/audit-service/
-COPY services/auth-service/go.mod services/auth-service/go.sum ./services/auth-service/
-COPY services/cart-service/go.mod services/cart-service/go.sum ./services/cart-service/
-COPY services/conversion-webhook/go.mod services/conversion-webhook/go.sum ./services/conversion-webhook/
-COPY services/feature-flag-service/go.mod services/feature-flag-service/go.sum ./services/feature-flag-service/
-COPY services/landing-service/go.mod services/landing-service/go.sum ./services/landing-service/
-COPY services/notification-service/go.mod services/notification-service/go.sum ./services/notification-service/
-COPY services/offer-service/go.mod services/offer-service/go.sum ./services/offer-service/
-COPY services/product-service/go.mod services/product-service/go.sum ./services/product-service/
-COPY services/redirect-service/go.mod services/redirect-service/go.sum ./services/redirect-service/
-COPY services/reporting-service/go.mod services/reporting-service/go.sum ./services/reporting-service/
-COPY services/storefront-service/go.mod services/storefront-service/go.sum ./services/storefront-service/
-COPY services/user-service/go.mod services/user-service/go.sum ./services/user-service/
-
-# Download dependencies (cached)
-RUN --mount=type=cache,target=/go/pkg/mod \
-  cd services/shared-lib && go mod download && \
-  cd ../admin-backoffice-service && go mod download && \
-  cd ../analytics-ingest-service && go mod download && \
-  cd ../api-gateway && go mod download && \
-  cd ../attribution-service && go mod download && \
-  cd ../audit-service && go mod download && \
-  cd ../auth-service && go mod download && \
-  cd ../cart-service && go mod download && \
-  cd ../conversion-webhook && go mod download && \
-  cd ../feature-flag-service && go mod download && \
-  cd ../landing-service && go mod download && \
-  cd ../notification-service && go mod download && \
-  cd ../offer-service && go mod download && \
-  cd ../product-service && go mod download && \
-  cd ../redirect-service && go mod download && \
-  cd ../reporting-service && go mod download && \
-  cd ../storefront-service && go mod download && \
-  cd ../user-service && go mod download
-
-# ----------------------------------------------------------------------------
-# BUILDER STAGE — build ALL binaries once
-# ----------------------------------------------------------------------------
-FROM deps AS builder
-
-WORKDIR /app
-
-COPY services ./services
-
-ENV CGO_ENABLED=0 \
-  GOOS=linux \
-  GOARCH=amd64
-
-RUN mkdir -p /binaries
-
-RUN --mount=type=cache,target=/go/pkg/mod \
-  --mount=type=cache,target=/root/.cache/go-build \
-  set -e; \
-  services="\
-  admin-backoffice-service \
-  analytics-ingest-service \
-  api-gateway \
-  attribution-service \
-  audit-service \
-  auth-service \
-  cart-service \
-  conversion-webhook \
-  feature-flag-service \
-  landing-service \
-  notification-service \
-  offer-service \
-  product-service \
-  redirect-service \
-  reporting-service \
-  storefront-service \
-  user-service"; \
-  pids=""; \
-  for svc in $services; do \
-  echo "Building $svc"; \
-  ( \
-  cd services/$svc && \
-  if [ -f ./cmd/main.go ]; then \
-  target=./cmd/main.go; \
-  else \
-  target=./main.go; \
-  fi && \
-  go build -ldflags="-w -s" -o /binaries/$svc $target \
-  ) & \
-  pids="$pids $!"; \
-  done; \
-  for pid in $pids; do wait $pid; done
-
-# ----------------------------------------------------------------------------
-# RUNTIME STAGE — ONE IMAGE PER SERVICE (THIS WAS THE BUG)
-# ----------------------------------------------------------------------------
+# ARG SERVICE_NAME is required to determine which microservice to build.
+# This must be passed via --build-arg SERVICE_NAME=<service-name>
 ARG SERVICE_NAME
 
-FROM gcr.io/distroless/static-debian12:nonroot AS runtime
+# Ensure SERVICE_NAME is provided
+RUN if [ -z "$SERVICE_NAME" ]; then echo "SERVICE_NAME argument is required" && exit 1; fi
+
+# Configure Go environment for production binaries
+ENV CGO_ENABLED=0 \
+    GOOS=linux \
+    GOARCH=amd64
+
+# Copy workspace configuration files first to optimize layer caching for dependencies
+COPY go.work go.work.sum ./
+
+# Copy all services into the container.
+# In a monorepo, services often depend on shared-lib or other modules in the workspace.
+COPY services ./services/
+
+# Download dependencies and build the specific service binary.
+# Using --mount=type=cache allows for significantly faster subsequent builds by persisting
+# Go's module and build caches.
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    cd services/${SERVICE_NAME} && \
+    if [ -f ./cmd/main.go ]; then TARGET=./cmd/main.go; else TARGET=./main.go; fi && \
+    go build -ldflags="-w -s" -o /app/app ${TARGET}
+
+# STAGE 2: Runtime
+# Minimalist, secure, non-root runtime environment
+FROM gcr.io/distroless/base-debian12:nonroot AS runtime
+
+# Labeling for traceability
+LABEL org.opencontainers.image.source="https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup"
+LABEL org.opencontainers.image.description="Cloud-Native E-Commerce Microservice"
 
 WORKDIR /app
 
-COPY --from=builder /binaries/${SERVICE_NAME} /app/app
+# Copy only the built binary from the builder stage
+COPY --from=builder /app/app /app/app
 
+# Expose the default service port
+EXPOSE 8080
+
+# Run as non-root (inherited from distroless:nonroot) for enhanced security
 USER nonroot:nonroot
 
-ENTRYPOINT ["/app/app"]
+# Define the entrypoint for the service
+CMD ["/app/app"]
