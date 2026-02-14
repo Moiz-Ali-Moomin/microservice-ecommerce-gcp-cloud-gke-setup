@@ -1,50 +1,61 @@
 # Airflow Helm Chart Configuration
 # Chart: apache-airflow/airflow v1.18.x
-# IMPORTANT: Image version MUST match chart version (1.18.x expects Airflow 3.x)
 
-executor: LocalExecutor  # LocalExecutor for resource efficiency (no workers needed)
+executor: LocalExecutor
 
-# Airflow Image - MUST be 3.x for chart 1.18.x
 images:
   airflow:
-    repository: apache/airflow
-    tag: 3.0.2
-    pullPolicy: IfNotPresent
+    repository: us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo/airflow
+    tag: latest
+    pullPolicy: Always
 
-# PostgreSQL - Embedded with stable image
+# FIXED PostgreSQL image tag
 postgresql:
   enabled: true
+
   image:
     registry: docker.io
     repository: bitnami/postgresql
-    tag: "16"  # Use major version, not specific point release
+    tag: 16.4.0-debian-12-r0   # ✅ VALID tag
+
   auth:
     enablePostgresUser: true
-    postgresPassword: ""  # Auto-generated if empty
+    postgresPassword: airflow
+    username: airflow
+    password: airflow
+    database: airflow
 
-# DAGs via GitSync (optional - enable if using git sync)
+  primary:
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: standard-rwo
+
+
+# DAGs local mount
 dags:
-  gitSync:
-    enabled: false
-    # repo: https://github.com/your-org/your-repo.git
-    # branch: main
-    # subPath: infra/airflow/dags
-    # depth: 1
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClassName: standard-rwo
+
 
 # Logs persistence
 logs:
   persistence:
     enabled: true
     size: 10Gi
-    storageClassName: standard-rwo  # GKE-compatible
+    storageClassName: standard-rwo
 
-# Disable Helm hooks to prevent migration timeout issues
+
+# Disable hooks (prevents timeout)
 createUserJob:
   useHelmHooks: false
+
 migrateDatabaseJob:
   useHelmHooks: false
 
-# Replicas - Minimal for resource efficiency
+
 scheduler:
   replicas: 1
   resources:
@@ -54,6 +65,7 @@ scheduler:
     limits:
       cpu: "1"
       memory: 1Gi
+
 
 webserver:
   replicas: 1
@@ -65,21 +77,24 @@ webserver:
       cpu: "1"
       memory: 1Gi
 
-# Disable workers (LocalExecutor doesn't need them)
+
 workers:
   replicas: 0
 
-# Disable optional components to save resources
+
 triggerer:
   replicas: 0
+
 dagProcessor:
   replicas: 0
+
 flower:
   enabled: false
 
-# RBAC
+
 rbac:
   create: true
+
 
 serviceAccount:
   create: true
