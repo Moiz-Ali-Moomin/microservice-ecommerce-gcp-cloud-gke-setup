@@ -6,7 +6,7 @@ WORKDIR /app
 # 1. Copy shared library (Dependency)
 COPY services/shared-lib ./services/shared-lib
 
-# 2. Copy go.mod (required) and go.sum (optional via glob pattern)
+# 2 Copy go.mod (required) and go.sum (optional via glob pattern)
 #    The go.su[m] pattern matches go.sum if present, but doesn't fail if missing.
 COPY services/storefront-service/go.mod services/storefront-service/go.su[m] ./services/storefront-service/
 
