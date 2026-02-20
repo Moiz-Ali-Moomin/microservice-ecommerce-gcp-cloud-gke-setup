@@ -32,11 +32,8 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]string{"result": "System Healthy", "revenue": "high"})
 	})
 
-	// Metabase Analytics
+	// Metabase Analytics JSON API
 	mux.HandleFunc("/api/analytics/token", metabase.GetAnalyticsTokenHandler)
-	mux.HandleFunc("/analytics", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "templates/analytics.html")
-	})
 
 	logger.Log.Info("Starting admin-backoffice-service on :8080")
 	if err := http.ListenAndServe(":8080", mux); err != nil {

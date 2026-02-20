@@ -1,0 +1,38 @@
+replicaCount: 1
+
+autoscaling:
+  enabled: false
+
+global:
+  image:
+    registry: us-central1-docker.pkg.dev
+    project: ecommerce-microservice-53
+    repository: ecommerce-repo
+
+image:
+  name: storefront-web
+  tag: "latest"
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 3000
+
+env:
+  GATEWAY_URL: "http://api-gateway.apps-public.svc.cluster.local:8080"
+  KAFKA_BROKERS: "ecommerce-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.platform-observability.svc.cluster.local:4317"
+  OTEL_SERVICE_NAME: "storefront-web"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+serviceAccount:
+  create: true
+  name: storefront-service
+  gcpServiceAccount: storefront-service@ecommerce-project.iam.gserviceaccount.com

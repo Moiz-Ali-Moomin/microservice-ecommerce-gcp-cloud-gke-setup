@@ -23,10 +23,17 @@ steps:
           echo "Building and pushing: $$SERVICE"
           echo "========================================="
 
-          docker build \
-            --build-arg SERVICE_NAME=$${SERVICE} \
-            -t $${IMAGE} \
-            -f Dockerfile.services .
+          if [[ "$${SERVICE}" == "storefront-web" ]]; then
+            docker build \
+              -t $${IMAGE} \
+              -f services/storefront-web/Dockerfile services/storefront-web/
+          else
+            docker build \
+              --build-arg SERVICE_NAME=$${SERVICE} \
+              -t $${IMAGE} \
+              -f Dockerfile.services .
+          fi
+
 
           docker push $${IMAGE}
 

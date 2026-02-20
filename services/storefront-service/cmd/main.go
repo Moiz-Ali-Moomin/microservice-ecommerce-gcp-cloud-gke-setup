@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"math/rand"
 	"net/http"
@@ -44,10 +43,6 @@ func main() {
 	// Initialize Services & Handler
 	analyticsService := service.NewAnalyticsService(producer)
 	h := handler.NewHandler(analyticsService, config)
-
-	// Static Files
-	fs := http.FileServer(http.Dir("./static"))
-	http.Handle("/static/", http.StripPrefix("/static/", fs))
 
 	// Routes
 	http.HandleFunc("/", h.Home) // Use new handler
@@ -98,14 +93,23 @@ func main() {
 
 func handleLogin(cfg handler.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
-			handler.Render(w, "login.html", map[string]interface{}{"Title": "Login"})
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		if r.Method != "POST" {
+			http.Error(w, `{"error": "Method not allowed"}`, http.StatusMethodNotAllowed)
 			return
 		}
 
-		// POST Login
-		username := r.FormValue("username")
-		password := r.FormValue("password")
+		// Read JSON body instead of FormValue
+		var reqBody map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+			http.Error(w, `{"error": "Invalid request body"}`, http.StatusBadRequest)
+			return
+		}
+
+		username := reqBody["username"]
+		password := reqBody["password"]
 
 		authBody, _ := json.Marshal(map[string]string{
 			"username": username,
@@ -114,10 +118,7 @@ func handleLogin(cfg handler.Config) http.HandlerFunc {
 
 		resp, err := http.Post(cfg.GatewayURL+"/api/v1/login", "application/json", bytes.NewBuffer(authBody))
 		if err != nil || resp.StatusCode != http.StatusOK {
-			handler.Render(w, "login.html", map[string]interface{}{
-				"Title": "Login",
-				"Error": "Invalid credentials",
-			})
+			http.Error(w, `{"error": "Invalid credentials"}`, http.StatusUnauthorized)
 			return
 		}
 		defer resp.Body.Close()
@@ -125,24 +126,32 @@ func handleLogin(cfg handler.Config) http.HandlerFunc {
 		var authResp handler.AuthResponse
 		json.NewDecoder(resp.Body).Decode(&authResp)
 
-		// Set Cookies
+		// Keep Cookies
 		http.SetCookie(w, &http.Cookie{Name: "auth_token", Value: authResp.Token, Path: "/", HttpOnly: true})
-		http.SetCookie(w, &http.Cookie{Name: "auth_user", Value: authResp.Username, Path: "/"}) // Visible for UI
+		http.SetCookie(w, &http.Cookie{Name: "auth_user", Value: authResp.Username, Path: "/"})
 
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Login successful", "user": authResp.Username})
 	}
 }
 
 func handleSignup(cfg handler.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
-			handler.Render(w, "signup.html", map[string]interface{}{"Title": "Create Account"})
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		if r.Method != "POST" {
+			http.Error(w, `{"error": "Method not allowed"}`, http.StatusMethodNotAllowed)
 			return
 		}
 
-		// POST Signup
-		username := r.FormValue("username")
-		password := r.FormValue("password")
+		var reqBody map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+			http.Error(w, `{"error": "Invalid request body"}`, http.StatusBadRequest)
+			return
+		}
+
+		username := reqBody["username"]
+		password := reqBody["password"]
 
 		authBody, _ := json.Marshal(map[string]string{
 			"username": username,
@@ -151,32 +160,36 @@ func handleSignup(cfg handler.Config) http.HandlerFunc {
 
 		resp, err := http.Post(cfg.GatewayURL+"/api/v1/signup", "application/json", bytes.NewBuffer(authBody))
 		if err != nil || resp.StatusCode != http.StatusCreated {
-			handler.Render(w, "signup.html", map[string]interface{}{
-				"Title": "Create Account",
-				"Error": "Failed to create account (User may exist)",
-			})
+			http.Error(w, `{"error": "Failed to create account (User may exist)"}`, http.StatusConflict)
 			return
 		}
 		defer resp.Body.Close()
 
-		// Auto-login or redirect to login
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Account created successfully. Please login."})
 	}
 }
 
 func handleLogout() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
 		http.SetCookie(w, &http.Cookie{Name: "auth_token", Value: "", Path: "/", MaxAge: -1})
 		http.SetCookie(w, &http.Cookie{Name: "auth_user", Value: "", Path: "/", MaxAge: -1})
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+
+		json.NewEncoder(w).Encode(map[string]string{"message": "Logged out successfully"})
 	}
 }
 
 func handleCart(cfg handler.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
 		userID := handler.GetAuthenticatedUser(r)
 		if userID == "" {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			http.Error(w, `{"error": "Unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
 
@@ -217,21 +230,23 @@ func handleCart(cfg handler.Config) http.HandlerFunc {
 		}
 
 		data := map[string]interface{}{
-			"Title": "My Cart",
-			"Cart":  cart,
-			"Total": total,
-			"User":  userID,
+			"cart":  cart,
+			"total": total,
+			"user":  userID,
 		}
 
-		handler.Render(w, "cart.html", data)
+		json.NewEncoder(w).Encode(data)
 	}
 }
 
 func handleCheckout(cfg handler.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
 		userID := handler.GetAuthenticatedUser(r)
 		if userID == "" {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			http.Error(w, `{"error": "Unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
 
@@ -262,24 +277,26 @@ func handleCheckout(cfg handler.Config) http.HandlerFunc {
 			}
 		}
 
-		handler.Render(w, "payment.html", map[string]interface{}{
-			"Title": "Payment Gateway",
-			"Total": total,
-			"User":  userID,
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"total": total,
+			"user":  userID,
 		})
 	}
 }
 
 func handlePaymentProcess(cfg handler.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
 		userID := handler.GetAuthenticatedUser(r)
 		if userID == "" {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			http.Error(w, `{"error": "Unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
 
 		if r.Method != "POST" {
-			http.Redirect(w, r, "/payment", http.StatusSeeOther)
+			http.Error(w, `{"error": "Method not allowed"}`, http.StatusMethodNotAllowed)
 			return
 		}
 
@@ -291,29 +308,37 @@ func handlePaymentProcess(cfg handler.Config) http.HandlerFunc {
 		rand.Seed(time.Now().UnixNano())
 		days := rand.Intn(5) + 3
 
-		handler.Render(w, "checkout.html", map[string]interface{}{
-			"Title":        "Order Confirmed",
-			"DeliveryDays": days,
-			"User":         userID,
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":       "success",
+			"deliveryDays": days,
+			"user":         userID,
 		})
 	}
 }
 
 func handleAddToCart(cfg handler.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
 		userID := handler.GetAuthenticatedUser(r)
 		if userID == "" {
-			// If not logged in, redirect to login page
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			http.Error(w, `{"error": "Unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
 
 		if r.Method != "POST" {
-			http.Redirect(w, r, "/", http.StatusSeeOther)
+			http.Error(w, `{"error": "Method not allowed"}`, http.StatusMethodNotAllowed)
 			return
 		}
 
-		offerID := r.FormValue("offer_id")
+		var reqBody map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+			http.Error(w, `{"error": "Invalid request body"}`, http.StatusBadRequest)
+			return
+		}
+
+		offerID := reqBody["offer_id"]
 
 		apiURL := fmt.Sprintf("%s/api/v1/cart?user_id=%s", cfg.GatewayURL, userID)
 
@@ -324,23 +349,23 @@ func handleAddToCart(cfg handler.Config) http.HandlerFunc {
 		jsonBody, _ := json.Marshal(item)
 
 		resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(jsonBody))
-		if err != nil {
+		if err != nil || resp.StatusCode != http.StatusOK {
 			log.Printf("Failed to add to cart: %v", err)
-		} else {
-			if resp.StatusCode != http.StatusOK {
-				body, _ := io.ReadAll(resp.Body)
-				log.Printf("Cart service status: %d, body: %s", resp.StatusCode, string(body))
-			}
-			defer resp.Body.Close()
+			http.Error(w, `{"error": "Failed to add to cart"}`, http.StatusInternalServerError)
+			return
 		}
+		defer resp.Body.Close()
 
-		http.Redirect(w, r, "/cart", http.StatusSeeOther)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Item added to cart"})
 	}
 }
 
 func handleRemoveFromCart(cfg handler.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/cart", http.StatusSeeOther)
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		// Implementation for removing would hit Gateway DELETE similar to clear
+		json.NewEncoder(w).Encode(map[string]string{"message": "Not implemented in detailed BFF yet"})
 	}
 }
 

@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"html/template"
 	"log"
 	"net/http"
 
@@ -84,35 +83,20 @@ func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 		json.NewDecoder(resp.Body).Decode(&offers)
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*") // Allow React to call this in dev
+
 	data := map[string]interface{}{
-		"Title":  "Home",
-		"Offers": offers,
-		"User":   username,
+		"offers": offers,
+		"user":   username,
 	}
 
-	Render(w, "home.html", data)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		log.Printf("Error encoding JSON: %v", err)
+	}
 }
 
 // --- Helpers ---
-
-var FuncMap = template.FuncMap{
-	"mul": func(a float64, b int) float64 {
-		return a * float64(b)
-	},
-}
-
-func Render(w http.ResponseWriter, tmplName string, data interface{}) {
-	tmpl, err := template.New("layout.html").Funcs(FuncMap).ParseFiles("templates/layout.html", "templates/"+tmplName)
-	if err != nil {
-		log.Printf("Template Parsing Error: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	if err := tmpl.Execute(w, data); err != nil {
-		log.Printf("Template Execution Error: %v", err)
-	}
-}
 
 func GetAuthenticatedUser(r *http.Request) string {
 	cookie, err := r.Cookie("auth_user")
