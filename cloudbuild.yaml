@@ -20,7 +20,7 @@ steps:
           IMAGE="us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo/$${SERVICE}:latest"
 
           echo "========================================="
-          echo "Building and pushing: $$SERVICE"
+          echo "Building and pushing to GCP: $$SERVICE"
           echo "========================================="
 
           if [[ "$${SERVICE}" == "storefront-web" ]]; then
