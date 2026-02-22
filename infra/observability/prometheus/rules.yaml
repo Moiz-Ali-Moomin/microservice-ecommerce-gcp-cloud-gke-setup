@@ -1,0 +1,45 @@
+# infra/observability/prometheus/rules.yaml
+
+groups:
+- name: ProductionSLOs
+  rules:
+  # 1. API Latency SLO Alert
+  # Alert if 99th percentile latency is consistently above 500ms
+  - alert: HighApiLatency
+    expr: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, path)) > 0.5
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High P99 Latency on {{ $labels.path }}"
+      description: "Latency has exceeded 500ms for 5 minutes. SLI violation imminent."
+
+  # 2. Error Rate SLO Alert
+  # Alert if error rate > 5% within 5m
+  - alert: HighErrorRate
+    expr: sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 0.05
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "High Error Rate (>5%)"
+      description: "Service is experiencing elevated HTTP 5xx errors."
+
+  # 3. Kafka Consumer Lag
+  - alert: KafkaConsumerLagHigh
+    expr: sum(kafka_consumergroup_lag) by (consumergroup) > 10000
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Consumer Lag > 10,000"
+      description: "Kafka consumers in group {{ $labels.consumergroup }} are heavily lagging."
+
+  # 4. DB Availability
+  - alert: DatabaseDown
+    expr: pg_up == 0
+    for: 2m
+    labels:
+      severity: critical
+    annotations:
+      summary: "PostgreSQL is unreachable"

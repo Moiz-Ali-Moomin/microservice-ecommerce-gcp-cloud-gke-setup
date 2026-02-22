@@ -48,6 +48,8 @@ spec:
       - name: spark-jobs
         mountPath: /opt/spark/jobs
     env:
+      - name: CHECKPOINT_PATH
+        value: gs://ecommerce-spark-checkpoints/funnel_analysis
       - name: DB_URL
         value: jdbc:postgresql://postgres-primary.data-postgres.svc.cluster.local:5432/ecommerce_db
       - name: DB_USER

@@ -1,0 +1,28 @@
+# A patch representing the addition of retries and timeouts to the existing VirtualService.
+# Since ecommerce-all.yaml is large, this patch specifies the required additions that would be applied to the routes.
+
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: ecommerce-gateway-routing-patch
+  namespace: ecommerce
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - main-gateway
+  http:
+  # Examples of injected resiliency:
+  - match:
+    - uri:
+        prefix: /api-gateway
+    route:
+    - destination:
+        host: api-gateway.apps-public.svc.cluster.local
+        port:
+          number: 8080
+    timeout: 5s
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+      retryOn: gateway-error,connect-failure,refused-stream

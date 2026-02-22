@@ -1,0 +1,48 @@
+# infra/observability/slos/ecommerce-slos.yaml
+apiVersion: openslo/v1
+kind: SLO
+metadata:
+  name: api-latency-slo
+spec:
+  service: api-gateway
+  description: "99% of requests complete in under 500ms over a rolling 30-day window"
+  budgetingMethod: Occurrences
+  objectives:
+    - ratioMetrics:
+        good:
+          metricSource:
+            type: Prometheus
+            spec:
+              query: sum(rate(http_request_duration_seconds_bucket{le="0.5"}[5m]))
+        total:
+          metricSource:
+            type: Prometheus
+            spec:
+              query: sum(rate(http_request_duration_seconds_count[5m]))
+      target: 0.99
+  timeWindows:
+    - rolling: 30d
+---
+apiVersion: openslo/v1
+kind: SLO
+metadata:
+  name: api-availability-slo
+spec:
+  service: api-gateway
+  description: "99.9% of requests must not return 5xx errors"
+  budgetingMethod: Occurrences
+  objectives:
+    - ratioMetrics:
+        good:
+          metricSource:
+            type: Prometheus
+            spec:
+              query: sum(rate(http_requests_total{status=~"2..|3..|4.."}[5m]))
+        total:
+          metricSource:
+            type: Prometheus
+            spec:
+              query: sum(rate(http_requests_total[5m]))
+      target: 0.999
+  timeWindows:
+    - rolling: 30d

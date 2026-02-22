@@ -1,0 +1,84 @@
+# infra/istio/security/authorization-policies/00-global-policies.yaml
+
+# 1. Default Deny All (Global)
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-all
+  namespace: istio-system
+spec:
+  {}
+---
+# 2. Allow Ingress Gateway to access Public/Core Services
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-ingress-to-services
+  namespace: istio-system
+spec:
+  selector:
+    matchExpressions:
+      - key: "istio"
+        operator: NotIn
+        values: ["ingressgateway"]
+  rules:
+    - from:
+        - source:
+            principals: ["cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"]
+---
+# 3. Allow Microservices to access Databases
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-services-to-db
+  namespace: data-postgres
+spec:
+  rules:
+    - from:
+        - source:
+            namespaces: ["apps-core", "apps-public", "apps-async", "data"]
+      to:
+        - operation:
+            ports: ["5432", "6379"]
+---
+# 4. Allow Kafka Producers and Consumers
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-kafka-traffic
+  namespace: kafka
+spec:
+  rules:
+    - from:
+        - source:
+            namespaces: ["apps-core", "apps-public", "apps-async", "data"]
+      to:
+        - operation:
+            ports: ["9092", "9093", "2181"]
+---
+# 5. Allow Spark to access Postgres (Idempotent explicit allow)
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-spark-to-postgres
+  namespace: data-postgres
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgresql
+  rules:
+    - from:
+        - source:
+            namespaces: ["data", "analytics"]
+---
+# 6. Allow Prom/OTel scraping (Observability)
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-observability
+  namespace: istio-system
+spec:
+  rules:
+    - from:
+        - source:
+            namespaces: ["platform-observability"]

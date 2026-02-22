@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync" // Added for local fallback cache
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -37,9 +38,10 @@ type Claims struct {
 }
 
 type Handler struct {
-	db       *sql.DB
-	redis    *redis.Client
-	producer *event.Producer
+	db         *sql.DB
+	redis      *redis.Client
+	producer   *event.Producer
+	localCache sync.Map
 }
 
 func mustEnv(key string) string {
@@ -179,7 +181,8 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	exp := time.Now().Add(1 * time.Hour)
+	// Make token short-lived for high security (15 minutes instead of 1 hour)
+	exp := time.Now().Add(15 * time.Minute)
 	claims := &Claims{
 		Username: creds.Username,
 		Role:     "user",
@@ -211,10 +214,30 @@ func (h *Handler) Validate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Redis blacklist check
-	ctx := r.Context()
-	blacklisted, err := h.redis.Get(ctx, "bl:"+claims.ID).Result()
-	if err == nil && blacklisted == "1" {
+	// Redis blacklist check with explicit timeout (Fail-Closed)
+	redisCtx, cancel := context.WithTimeout(r.Context(), 500*time.Millisecond)
+	defer cancel()
+
+	blacklisted, err := h.redis.Get(redisCtx, "bl:"+claims.ID).Result()
+	if err == redis.Nil {
+		// Token is valid
+		h.localCache.Store(claims.ID, false)
+	} else if err != nil {
+		// Redis Failure! Attempt In-Memory Fallback
+		logger.Log.Warn("Redis unreachable; checking local memory cache", zap.Error(err))
+		if val, ok := h.localCache.Load(claims.ID); ok {
+			if val.(bool) {
+				http.Error(w, "Token revoked", http.StatusUnauthorized)
+				return
+			}
+		} else {
+			// Fail-Closed: If Redis fails and it's not in cache, reject traffic.
+			http.Error(w, "Auth backend unavailable", http.StatusServiceUnavailable)
+			return
+		}
+	} else if blacklisted == "1" {
+		// Token is revoked
+		h.localCache.Store(claims.ID, true)
 		http.Error(w, "Token revoked", http.StatusUnauthorized)
 		return
 	}

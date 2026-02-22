@@ -1,356 +1,207 @@
-# 🛒 Enterprise Cloud-Native E-Commerce Platform
-### Production-Grade Microservices on GKE with Terraform, GitOps, Service Mesh & Data Engineering Pipeline
+# 🛒 Enterprise Cloud-Native E-Commerce Platform Base
 
-![Build Status](https://img.shields.io/github/actions/workflow/status/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/?style=for-the-badge&logo=github)
-![Go Version](https://img.shields.io/github/go-mod/go-version/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup?style=for-the-badge&logo=go)
-![Kubernetes](https://img.shields.io/badge/Orchestration-GKE-326CE5?style=for-the-badge&logo=kubernetes)
-![Terraform](https://img.shields.io/badge/IaC-Terraform-7B42BC?style=for-the-badge&logo=terraform)
-![Istio](https://img.shields.io/badge/Service_Mesh-Istio-466BB0?style=for-the-badge&logo=istio)
-![Argo CD](https://img.shields.io/badge/GitOps-Argo_CD-EF7B4D?style=for-the-badge&logo=argo)
-![Kafka](https://img.shields.io/badge/Event_Bus-Kafka-231F20?style=for-the-badge&logo=apachekafka)
-![Spark](https://img.shields.io/badge/Big_Data-Spark-E25A1C?style=for-the-badge&logo=apachespark)
-![Airflow](https://img.shields.io/badge/Workflow-Airflow-017CEE?style=for-the-badge&logo=apacheairflow)
+**Classification:** Internal Platform Engineering Documentation  
+**Tier:** 1 (Mission Critical)  
+**Owners:** `@platform-engineering`, `@data-engineering`, `@sre-core`
 
 ---
 
-## 📖 Table of Contents
+## 📖 Platform Overview
+This repository contains the declarative state for the Enterprise E-Commerce Platform. It unifies Application Engineering (18 independent Go microservices), Cloud Infrastructure (Terraform/GKE), Data Engineering (Kafka/Spark Structured Streaming), and Security (Global mTLS, ExternalSecrets) under a strict GitOps methodology managed by ArgoCD.
 
-1. [Executive Summary](#-executive-summary)
-2. [The "Why": Business Case](#-the-why-business-case--problem-statement)
-3. [The "Where": Infrastructure Topology](#-the-where-infrastructure-topology)
-4. [The "How": Architecture & Tech Stack](#-the-how-architecture--tech-stack)
-5. [The "Who": Roles & Responsibilities](#-the-who-roles--responsibilities)
-6. [Enterprise FAQ & Architectural Decisions](#-enterprise-faq--architectural-decisions)
-7. [Enterprise Deployment Guide](#-enterprise-gke-platform-deployment-guide)
-8. [Verification](#-final-verification-checklist)
+> [!WARNING]
+> **Strict GitOps Enforcement:** Modifying Kubernetes resources manually via `kubectl apply` or `helm upgrade` in the production cluster is a violation of policy. All changes must be committed to this repository. ArgoCD (`selfHeal: true`) will aggressively overwrite manual drift.
 
 ---
 
-## 🎯 Executive Summary
-
-This repository represents a **holistic Platform Engineering initiative**. It is not merely a collection of microservices; it is a demonstration of a scalable, secure, and observable ecosystem designed to handle high-concurrency e-commerce workloads.
-
-It bridges the gap between **Application Development** (Go/Gin microservices), **Infrastructure Operations** (Terraform/GKE), and **Data Engineering** (Kafka/Spark/Airflow), unified under a GitOps methodology.
-
----
-
-## 💡 The "Why": Business Case & Problem Statement
-
-| Challenge | The Solution implemented in this Repo |
-| :--- | :--- |
-| **Monolithic Bottlenecks** | Decoupled **18+ microservices** allow independent scaling of `cart-service` during flash sales without scaling `user-service`. |
-| **Data Silos** | Real-time **Kafka** event streaming combined with **Spark** batch processing ensures marketing and inventory data are consistent. |
-| **Operational Toil** | **Terraform** provisions infrastructure idempotently; **Argo CD** ensures the cluster state matches git automatically. |
-| **Security Risks** | **Istio** provides Zero-Trust mTLS between services; **External Secrets** prevents credentials from ever touching the git repo. |
-| **Blind Spots** | A full **Observability Stack** (Loki/Tempo/Prometheus) provides "Golden Signal" monitoring for instant incident resolution. |
-
----
-
-## 📍 The "Where": Infrastructure Topology
-
-The platform resides on **Google Cloud Platform (GCP)**, specifically within a Virtual Private Cloud (VPC).
-
-* **Compute Layer:** Google Kubernetes Engine (GKE) - *Regional Cluster*.
-* **Data Layer:** Cloud SQL (Postgres), Memorystore (Redis), GCS (Terraform State).
-* **Secret Layer:** Google Secret Manager (synced to K8s via External Secrets Operator).
-* **Network Layer:**
-    * **Public Subnet:** Load Balancers & Istio Ingress Gateway.
-    * **Private Subnet:** GKE Nodes, Databases (No public IPs).
-
----
-
-## ⚙️ The "How": Architecture & Tech Stack
-
-### Traffic Flow Diagram
+## 🏛️ Architecture & Traffic Flow
+The platform is built on Google Kubernetes Engine (GKE) and enforcing Zero-Trust networking via Istio.
 
 ```mermaid
 graph TD
-    User((User)) -->|HTTPS| GLB[Google Load Balancer]
+    User((Client)) -->|HTTPS| GLB[GCP Load Balancer]
     GLB --> Istio[Istio Ingress Gateway]
 
-    subgraph "Kubernetes Cluster (GKE)"
-        Istio -->|mTLS| Gateway[API Gateway]
+    subgraph "GKE Cluster (Strict mTLS enforcing)"
+        Istio -->|VirtualService| Gateway[API Gateway proxy]
 
         %% Core Domain
         Gateway --> Auth[Auth Service]
         Gateway --> Product[Product Service]
         Gateway --> Cart[Cart Service]
         Gateway --> Order[Order Service]
-        Gateway --> Offer[Offer Service]
-
-        %% Data Ingestion
-        Gateway --> Ingest[Analytics Ingest]
-        Gateway --> Webhook[Conversion Webhook]
 
         %% Async Backbone
         Order --> Kafka{Kafka Cluster}
-        Ingest --> Kafka
+        Gateway --> Ingest[Analytics Ingest] --> Kafka
 
-        %% Consumers
-        Kafka --> Audit[Audit Service]
+        %% Consumers & Data Ops
         Kafka --> Notif[Notification Service]
-        Kafka --> Reporting[Reporting Service]
+        Kafka --> |ReadStream| Spark[Spark Jobs on K8s]
         
-        %% Data Ops
-        Airflow[Airflow Orchestrator] -->|Trigger| Spark[Spark Jobs]
-        Spark -->|Read| Kafka
-        Spark -->|Write| AnalyticsDB[(Postgres Analytics)]
+        %% Idempotent DB Layer
+        Auth --> AuthDB[(Postgres)]
+        Spark -->|Upsert| AnalyticsDB[(Postgres Analytics)]
         
         AnalyticsDB --> Metabase[Metabase BI]
     end
-👥 The "Who": Roles & Responsibilities
-This platform is designed to support cross-functional teams.
+```
 
-Platform Engineer: Manages infra/terraform, GKE, Istio, and GitOps pipelines.
+---
 
-Backend Developer: Owns services/*, utilizing the shared-lib for standardized logging and tracing.
+## 🔐 1. Secret Management (External Secrets Flow)
 
-Data Engineer: Manages infra/airflow DAGs, Spark jobs, and Kafka schemas.
+We do not store `.env` files or base64 `Secret` manifests in git. Secrets are mastered in **Google Secret Manager (GSM)** and synchronized dynamically into GKE memory via the External Secrets Operator (ESO).
 
-Security Engineer: Audits IAM roles, SonarQube gates, and Istio policies.
+**Sync Flow:** `GSM` → `Workload Identity` → `ClusterSecretStore` → `ExternalSecret` → `Native K8s Secret`
 
-🏛️ Enterprise FAQ & Architectural Decisions
-Q: How are secrets managed securely?
-A: We use External Secrets Operator (ESO). Secrets are stored in Google Secret Manager (GSM) and injected into Kubernetes only at runtime. No .env files or base64 secrets exist in the git repository.
+### Creating a New Secret
+Before deploying a service that requires a secret, you must provision it in GCP:
+```bash
+# Example: Adding a new DB password for cart-service
+gcloud secrets create cart-db-password --replication-policy="automatic"
+echo -n "super-secure-password" | gcloud secrets versions add cart-db-password --data-file=-
+```
 
-Q: How does the system handle Flash Sales (High Load)?
-A:
+> [!IMPORTANT]
+> **Dependency Block:** If an `ExternalSecret` requests a GSM key that does not exist, the operator will block the creation of the native K8s `Secret`. Subsequently, the dependent Deployment Pods will fail to start (`CreateContainerConfigError`).
 
-HPA (Horizontal Pod Autoscaler): Scales pods based on CPU/Memory/Custom Metrics.
+**Verify Synchronization:**
+```bash
+# Verify the ESO has pulled the secret successfully
+kubectl get externalsecrets -A | grep True
+```
 
-Cluster Autoscaler: Provisions new GKE nodes when pod capacity is reached.
+---
 
-Redis Caching: product-service and cart-service heavily utilize Redis to reduce DB load.
+## 🚀 2. Infrastructure Initialization (Terraform)
 
-Q: What is the Disaster Recovery (DR) strategy?
-A: Infrastructure is defined in Terraform (IaC). In a catastrophic failure, we can spin up a new cluster in a different region using the same scripts. Database backups are handled by Cloud SQL automated backups.
+Infrastructure MUST be provisioned sequentially. 
 
-Q: Is the communication secure?
-A: Yes. Istio Service Mesh enforces strict mTLS (mutual TLS) between all microservices. Services cannot talk to each other unless explicitly allowed by AuthorizationPolicies.
-
-🚀 Enterprise GKE Platform Deployment Guide
-Follow these 14 steps sequentially to provision the entire platform from scratch.
-
-Step 1 — Init GCP
-Initialize your Google Cloud environment and enable required APIs.
-
-Bash
-gcloud auth login
-
-gcloud config set project ecommerce-microservice-53
-
-gcloud services enable \
-    container.googleapis.com \
-    artifactregistry.googleapis.com \
-    cloudbuild.googleapis.com \
-    secretmanager.googleapis.com \
-    iam.googleapis.com
-Step 2 — Terraform Infrastructure
-Provision the base infrastructure components: State Backend, Identity, and Secrets.
-
-Bash
-# 2.1 Backend
+### Step 2.1: Bootstrap GCP & IAM
+Enable required APIs and initialize the remote state bucket.
+```bash
 cd infra/terraform/gcp/bootstrap-backend
-terraform init
-terraform apply -auto-approve
+terraform init && terraform apply -auto-approve
 
-# 2.2 Identity
 cd ../bootstrap-identity
-terraform init
-terraform apply -auto-approve
+terraform init && terraform apply -auto-approve
+```
 
-# 2.3 Secrets Manager
-cd ../secrets
-terraform init
-terraform apply -auto-approve
-Step 3 — Provision GKE Cluster
-Deploy the Kubernetes cluster and node pools.
+### Step 2.2: Compute & Service Mesh Initialization
+Provision GKE, Node Pools, and Workload Identity bindings.
+```bash
+cd ../gke
+terraform init && terraform apply -auto-approve
 
-Bash
-cd ../../../gke
-
-terraform init
-terraform apply -auto-approve
-
-# Connect to the new cluster
+# Authenticate local context
 gcloud container clusters get-credentials ecommerce-platform-prod --region us-central1
+```
 
-# Verify nodes
-kubectl get nodes
-Step 4 — Namespaces
-Create the logical isolation boundaries for the platform.
+---
 
-Bash
+## 🔄 3. CI/CD & Image Immutability
+
+Docker images are built via Google Cloud Build (or GitHub Actions). We strictly enforce **immutable image tags** tying deployments back to exact `git.sha` references.
+
+1. Commits trigger `.github/workflows/ci.yml`.
+2. Services are built (distroless) and pushed to `us-central1-docker.pkg.dev` with the Git SHA tag.
+3. ArgoCD Image Updater (or Kustomize PRs) detects the new SHA and patches the manifest.
+4. ArgoCD orchestrates a Rollout (Canary) deployment.
+
+> [!CAUTION]
+> Utilizing `:latest` tags is explicitly banned to prevent non-deterministic rollbacks.
+
+---
+
+## 📦 4. Kubernetes & GitOps Bootstrapping (ArgoCD)
+
+Once the GKE cluster is available, hand over deployment execution to ArgoCD. The "App of Apps" pattern manages dependency ordering.
+
+### Step 4.1: Install ArgoCD
+```bash
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/v2.10.4/manifests/install.yaml
+```
+
+### Step 4.2: Apply Base Dependencies (Manual)
+Service Mesh and Secrets Operators must exist before stateful apps.
+```bash
+# 1. Namespaces (Initializes Istio injection labels and PodSecurityStandards)
 kubectl apply -f infra/namespaces/
 
-kubectl get ns
-Step 5 — External Secrets
-Install the operator to sync Google Secret Manager secrets into Kubernetes.
-
-Bash
-helm upgrade --install external-secrets infra/external-secrets \
-    -n external-secrets \
-    --create-namespace \
-    --wait
-
-# Apply ClusterSecretStore and ExternalSecrets
-kubectl apply -f infra/secrets/external-secrets.yaml
-kubectl apply -f infra/app-secrets/
-
-# Verify secrets are synced
-kubectl get externalsecret -A
-Step 6 — PostgreSQL and Redis
-Deploy the stateful data layer.
-
-Bash
-helm repo add bitnami [https://charts.bitnami.com/bitnami](https://charts.bitnami.com/bitnami)
-helm repo update
-
-# PostgreSQL
-helm upgrade --install postgres bitnami/postgresql \
-    -n data-postgres \
-    -f infra/databases/postgres/values.yaml \
-    --wait
-
-# Redis
-helm upgrade --install redis bitnami/redis \
-    -n data-redis \
-    -f infra/databases/redis/values.yaml \
-    --wait
-Step 7 — Kafka (Event Backbone)
-Deploy the Strimzi operator and the Kafka cluster.
-
-Bash
-# Install Operator
-helm upgrade --install strimzi strimzi/strimzi-kafka-operator \
-    -n kafka \
-    --create-namespace \
-    --wait
-
-# Deploy Cluster & Topics
-kubectl apply -f infra/kafka/storage/
-kubectl apply -f infra/kafka/cluster/
-kubectl apply -f infra/kafka/topics/
-Step 8 — Observability Stack
-Deploy Prometheus, Grafana, and related monitoring tools.
-
-Bash
-helm upgrade --install kube-prometheus-stack \
-    prometheus-community/kube-prometheus-stack \
-    -n platform-observability \
-    --create-namespace \
-    --wait
-Step 9 — Istio Service Mesh
-Install the service mesh control plane and configure ingress gateways.
-
-Bash
-# Install Istio
-istioctl install --set profile=default --set components.cni.enabled=false -y
-
-# Enable Sidecar Injection
-kubectl label namespace apps-public istio-injection=enabled --overwrite
-kubectl label namespace apps-core istio-injection=enabled --overwrite
-kubectl label namespace apps-async istio-injection=enabled --overwrite
-
-# Deploy Gateways and Security Policies
-kubectl apply -f infra/istio/gateway-workload/
-kubectl apply -f infra/istio/ingress/
+# 2. Istio Mesh (Sets up mTLS STRICT and Default-Deny Authorization Policies)
+istioctl install --set profile=default -y
 kubectl apply -f infra/istio/security/
-Step 10 — Build and Push Images
-Build all microservices using Google Cloud Build and push to Artifact Registry.
 
-Bash
-# Triggers the build for all services defined in cloudbuild.yaml
-gcloud builds submit --config cloudbuild.yaml .
+# 3. External Secrets (Requires Workload Identity from TF Step 2.1)
+helm upgrade --install external-secrets external-secrets/external-secrets -n external-secrets --wait
+kubectl apply -f infra/secrets/external-secrets.yaml
+```
 
-# Verify images
-gcloud artifacts docker images list \
-    us-central1-docker.pkg.dev/ecommerce-microservice-53/ecommerce-repo
-Step 11 — Deploy Data Tools (Airflow & Metabase)
-Deploy the data engineering orchestration and BI tools.
+### Step 4.3: Execute GitOps Sync
+Apply the Root Application. This will deterministically sync Databases → Kafka → Observability → Data Pipeline → Microservices.
+```bash
+kubectl apply -f argocd/root/application.yaml
+```
 
-Bash
-# Airflow
-helm upgrade --install airflow apache-airflow/airflow \
-    -n tooling-airflow \
-    -f infra/airflow/values.yaml \
-    --wait
+---
 
-# Metabase
-helm upgrade --install metabase oci://registry-1.docker.io/bitnamicharts/metabase \
-    -n tooling-metabase \
-    -f infra/metabase/values.yaml \
-    --create-namespace \
-    --wait
+## 📊 5. Data Pipeline (ELT) & Analytics
 
-# Access Metabase UI
-kubectl port-forward svc/metabase -n tooling-metabase 3001:3000
-Step 12 — Deploy ALL Microservices
-Deploy the application layer, categorized by domain.
+The ELT pipeline handles transactional analytics asynchronously without impacting the hot path.
 
-Core Services
-Bash
-helm upgrade --install auth-service services/auth-service/helm -n apps-core --wait
-helm upgrade --install user-service services/user-service/helm -n apps-core --wait
-helm upgrade --install product-service services/product-service/helm -n apps-core --wait
-helm upgrade --install order-service services/order-service/helm -n apps-core --wait
-helm upgrade --install cart-service services/cart-service/helm -n apps-core --wait
-helm upgrade --install feature-flag-service services/feature-flag-service/helm -n apps-core --wait
-helm upgrade --install notification-service services/notification-service/helm -n apps-core --wait
-helm upgrade --install offer-service services/offer-service/helm -n apps-core --wait
-Public Services
-Bash
-helm upgrade --install api-gateway services/api-gateway/helm -n apps-public --wait
-helm upgrade --install storefront-service services/storefront-service/helm -n apps-public --wait
-helm upgrade --install landing-service services/landing-service/helm -n apps-public --wait
-helm upgrade --install redirect-service services/redirect-service/helm -n apps-public --wait
-helm upgrade --install admin-backoffice-service services/admin-backoffice-service/helm -n apps-public --wait
-Async Services
-Bash
-helm upgrade --install analytics-ingest-service services/analytics-ingest-service/helm -n apps-async --wait
-helm upgrade --install attribution-service services/attribution-service/helm -n apps-async --wait
-helm upgrade --install audit-service services/audit-service/helm -n apps-async --wait
-helm upgrade --install reporting-service services/reporting-service/helm -n apps-async --wait
-helm upgrade --install conversion-webhook services/conversion-webhook/helm -n apps-async --wait
-Step 13 — Deploy Spark Jobs
-Submit the data processing jobs to the cluster.
+**Data Flow:** `Order Service` → `Kafka` → `Spark Structured Streaming` → `Postgres` → `Metabase`
 
-Bash
-kubectl apply -f infra/spark/spark-submit.yaml
+1. **Spark Operator:** Orchestrates PySpark jobs inside the cluster.
+2. **Exactly-Once Semantics:** `funnel_analysis.py` uses `readStream` reading from the `page.viewed` topic, leveraging GCS checkpointing (`CHECKPOINT_PATH`) to guarantee no data loss on pod eviction.
+3. **Database Idempotency:** The Spark Py4j JDBC writer executes native Postgres `UPSERT (ON CONFLICT DO UPDATE)` commands locking records safely.
 
-kubectl get pods -n spark
-Step 14 — Final Verification
-Ensure the platform is healthy and operational.
+### Monitoring Streaming Jobs
+```bash
+# Inspect the spark driver processing loop
+kubectl logs -f spark-funnel-analysis-driver -n data
+```
 
-Bash
-# 1. Check all pods are running
-kubectl get pods -A
+---
 
-# 2. Verify Secret Synchronization
-kubectl get externalsecret -A
+## ⚙️ 6. Operations & Observability 
 
-# 3. Check Ingress IP
-kubectl get svc istio-ingressgateway -n istio-system
+All applications are natively instrumented with OpenTelemetry (`shared-lib/pkg/tracing`) propagating W3C context headers.
 
-# 4. Check Data Tooling
-kubectl get pods -n tooling-airflow
-kubectl get pods -n tooling-metabase
+### Common SRE Commands
 
-# 5. Check Persistence
-kubectl get pods -n data-postgres
-kubectl get pods -n data-redis
-✅ Final Verification Checklist
-The platform is considered READY when:
+**Debugging Traffic Routing (Istio):**
+```bash
+# Check if a VirtualService is rejecting your route
+istioctl proxy-status
+istioctl analyze -n ecommerce
+```
 
-[ ] All Pods are in Running state (No CrashLoopBackOff).
+**Validating HPA / Scaling:**
+```bash
+# Confirm metrics server is feeding resource utilization properly
+kubectl get hpa -A
+```
 
-[ ] Istio Ingress Gateway has an assigned External IP.
+**Verifying Kafka Consumer Lag:**
+```bash
+# Ensure consumers aren't falling behind producer ingestion rates
+kubectl exec -it my-kafka-cluster-kafka-0 -n kafka -- bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group notification-group
+```
 
-[ ] All images are successfully present in Artifact Registry.
+**Inspecting Application Logs (Structured):**
+```bash
+# Search for specific trace IDs across the cart-service
+kubectl logs -l app=cart-service -n apps-core | grep '"trace_id":"xyz123"'
+```
 
-[ ] Airflow, Spark, and Metabase are accessible.
+---
 
-[ ] External Secrets have status Synced.
+## 🏁 7. Verification Checklist
+A deployment is only finalized when all of the following conditions report healthy:
 
-📄 License
-MIT License
+* [ ] `kubectl get externalsecrets -A` (All True/Synced)
+* [ ] `kubectl get hpa -A` (All Targets registering % utilization, no `<unknown>`)
+* [ ] `kubectl get pods -n istio-system` (Ingress Gateway Running)
+* [ ] Grafana Dashboards confirm 99% API Latency SLO `< 500ms`.

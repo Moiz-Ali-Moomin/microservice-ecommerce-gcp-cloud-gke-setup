@@ -1,0 +1,25 @@
+# infra/istio/security/destination-rules/00-circuit-breakers.yaml
+
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: global-backend-circuit-breaker
+  namespace: istio-system
+spec:
+  host: "*.svc.cluster.local"
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 1000
+        connectTimeout: 30ms
+      http:
+        http1MaxPendingRequests: 200
+        maxRequestsPerConnection: 1000
+        maxRetries: 3
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+    tls:
+      mode: ISTIO_MUTUAL

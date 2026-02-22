@@ -75,3 +75,29 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tooling-metabase
+  namespace: platform-argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: tooling
+  source:
+    repoURL: https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup
+    targetRevision: HEAD
+    path: infra/metabase
+    helm:
+      valueFiles:
+        - values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: tooling-metabase
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
