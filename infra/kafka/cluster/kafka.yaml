@@ -1,7 +1,13 @@
 apiVersion: kafka.strimzi.io/v1beta2
 kind: Kafka
 metadata:
-  name: ecommerce-cluster
+  # ── AUDIT FIX ─────────────────────────────────────────────────────────────
+  # Renamed from "ecommerce-cluster" to "kafka-cluster".
+  # Strimzi generates bootstrap service as: <name>-kafka-bootstrap
+  # All services connect to: kafka-cluster-kafka-bootstrap.kafka:9092
+  # Old name would have generated:  ecommerce-cluster-kafka-bootstrap  ← BROKEN
+  # ──────────────────────────────────────────────────────────────────────────
+  name: kafka-cluster
   namespace: kafka
   annotations:
     strimzi.io/node-pools: "enabled"
@@ -14,12 +20,20 @@ spec:
         port: 9092
         type: internal
         tls: false
+      # Internal TLS listener for inter-broker and cross-namespace service comms
+      - name: tls
+        port: 9093
+        type: internal
+        tls: true
     config:
       offsets.topic.replication.factor: 3
       transaction.state.log.replication.factor: 3
       transaction.state.log.min.isr: 2
       default.replication.factor: 3
       min.insync.replicas: 2
-      inter.broker.protocol.version: "3.7"
+      # ── AUDIT FIX: inter.broker.protocol.version must not exceed kafka version
+      # Kafka 4.1.1 → use 4.0 (latest stable that Kafka 4.1.x supports)
+      inter.broker.protocol.version: "4.0"
   entityOperator:
     topicOperator: {}
+    userOperator: {}

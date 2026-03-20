@@ -1,7 +1,22 @@
-# Airflow Helm Chart Configuration
-# Chart: apache-airflow/airflow v1.18.x
+# infra/airflow/values.yaml
+# ──────────────────────────────────────────────────────────────────────────────
+# AUDIT FIXES APPLIED:
+#  1. executor: LocalExecutor → KubernetesExecutor
+#     LocalExecutor with 0 workers serializes all DAG tasks on the scheduler pod.
+#     For production Spark submissions, KubernetesExecutor creates a fresh pod per task.
+#
+#  2. Removed hardcoded plaintext postgresql credentials.
+#     Credentials injected via ExternalSecret → Kubernetes Secret.
+#
+#  3. Added AIRFLOW__CORE__EXECUTOR and AIRFLOW_ENV environment variable.
+#     The DAG code branches on `os.environ.get("AIRFLOW_ENV", "vm")`.
+#     Without AIRFLOW_ENV=k8s the Kubernetes Spark operator path is NEVER taken.
+#
+#  4. Added Workload Identity annotation to Airflow service account so the
+#     DAG can call GCP APIs (GCS, BigQuery) without a service account key.
+# ──────────────────────────────────────────────────────────────────────────────
 
-executor: LocalExecutor
+executor: KubernetesExecutor
 
 images:
   airflow:
@@ -9,21 +24,26 @@ images:
     tag: latest
     pullPolicy: Always
 
-# FIXED PostgreSQL image tag
+# ── PostgreSQL (Airflow metadata DB) ─────────────────────────────────────────
+# AUDIT FIX: removed hardcoded credentials.
+# Airflow chart supports secretName for the postgres password.
 postgresql:
   enabled: true
 
   image:
     registry: docker.io
     repository: bitnami/postgresql
-    tag: 16.4.0-debian-12-r0   # ✅ VALID tag
+    tag: 16.4.0-debian-12-r0
 
   auth:
     enablePostgresUser: true
-    postgresPassword: airflow
-    username: airflow
-    password: airflow
     database: airflow
+    username: airflow
+    # AUDIT FIX: use secret reference, never plaintext in values.yaml
+    existingSecret: airflow-postgres-secret
+    secretKeys:
+      adminPasswordKey: postgres-password
+      userPasswordKey: password
 
   primary:
     persistence:
@@ -31,33 +51,39 @@ postgresql:
       size: 10Gi
       storageClass: standard-rwo
 
-
-# DAGs local mount
+# DAGs from Git
 dags:
   persistence:
     enabled: true
     size: 1Gi
     storageClassName: standard-rwo
 
-
-# Logs persistence
 logs:
   persistence:
     enabled: true
     size: 10Gi
     storageClassName: standard-rwo
 
-
-# Disable hooks (prevents timeout)
 createUserJob:
   useHelmHooks: false
 
 migrateDatabaseJob:
   useHelmHooks: false
 
+# ── AUDIT FIX: set AIRFLOW_ENV=k8s so DAG uses SparkKubernetesOperator ──────
+env:
+  - name: AIRFLOW_ENV
+    value: "k8s"
+  - name: AIRFLOW__CORE__EXECUTOR
+    value: "KubernetesExecutor"
+  # Allow Airflow to submit Spark CRDs to the analytics namespace
+  - name: AIRFLOW__KUBERNETES__NAMESPACE
+    value: "analytics"
+  - name: AIRFLOW__KUBERNETES__IN_CLUSTER
+    value: "True"
 
 scheduler:
-  replicas: 1
+  replicas: 2   # HA: 2 schedulers with leader election
   resources:
     requests:
       cpu: 250m
@@ -65,7 +91,6 @@ scheduler:
     limits:
       cpu: "1"
       memory: 1Gi
-
 
 webserver:
   replicas: 1
@@ -77,13 +102,11 @@ webserver:
       cpu: "1"
       memory: 1Gi
 
-
 workers:
-  replicas: 0
-
+  replicas: 0  # KubernetesExecutor creates worker pods dynamically
 
 triggerer:
-  replicas: 0
+  replicas: 1  # Required for deferred operators (SparkKubernetesSensor uses reschedule mode)
 
 dagProcessor:
   replicas: 0
@@ -91,11 +114,12 @@ dagProcessor:
 flower:
   enabled: false
 
-
 rbac:
   create: true
-
 
 serviceAccount:
   create: true
   name: airflow-service-account
+  annotations:
+    # ── AUDIT FIX: Workload Identity so Airflow can call GCS/BigQuery ─────────
+    iam.gke.io/gcp-service-account: airflow-sa@ecommerce-microservice-53.iam.gserviceaccount.com

@@ -1,7 +1,10 @@
-replicaCount: 1
+replicaCount: 2
 
 autoscaling:
-  enabled: false
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 60
 
 global:
   image:
@@ -19,9 +22,19 @@ service:
   port: 8080
 
 env:
-  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.platform-observability.svc.cluster.local:4317"
+  # VALIDATION FIX: gRPC endpoint must be host:port (no http:// prefix)
+  # Old: "http://otel-collector..." → gRPC dialer ignores http:// and uses
+  # it literally → connection fails.
+  OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector.platform-observability.svc.cluster.local:4317"
   OTEL_SERVICE_NAME: "order-service"
   KAFKA_BROKERS: "kafka-cluster-kafka-bootstrap.kafka:9092"
+
+# VALIDATION FIX: POSTGRES_DSN injected via ExternalSecret → K8s Secret
+# Without envSecrets, the service Fatal()s on startup ("POSTGRES_DSN env var is required")
+envSecrets:
+  POSTGRES_DSN:
+    name: order-service-secrets
+    key: POSTGRES_DSN
 
 resources:
   requests:
@@ -34,4 +47,12 @@ resources:
 serviceAccount:
   create: true
   name: order-service
-  gcpServiceAccount: order-service@ecommerce-project.iam.gserviceaccount.com
+  gcpServiceAccount: order-service@ecommerce-microservice-53.iam.gserviceaccount.com
+
+# VALIDATION FIX: Cloud SQL Auth Proxy sidecar settings
+# Without this sidecar, POSTGRES_DSN points to 127.0.0.1:5432 which resolves
+# to nothing → pgxpool.Ping() fails → startup Fatal.
+cloudSqlProxy:
+  enabled: true
+  instanceConnectionName: "ecommerce-microservice-53:us-central1:ecommerce-db"
+  port: 5432

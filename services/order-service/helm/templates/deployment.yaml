@@ -15,13 +15,16 @@ spec:
     metadata:
       annotations:
         sidecar.istio.io/inject: "true"
+        # Re-roll pods when secrets change
+        checksum/secrets: {{ include (print $.Template.BasePath "/externalsecret.yaml") . | sha256sum }}
       labels:
         {{- include "order-service.selectorLabels" . | nindent 8 }}
     spec:
-      {{- if .Values.serviceAccount.create }}
       serviceAccountName: {{ .Values.serviceAccount.name }}
-      {{- end }}
+      # Required for Workload Identity
+      automountServiceAccountToken: true
       containers:
+        # ── Primary container ──────────────────────────────────────────────
         - name: {{ .Chart.Name }}
           image: "{{ or .Values.image.fullPath (printf "%s/%s/%s/%s:%s" .Values.global.image.registry .Values.global.image.project .Values.global.image.repository .Values.image.name .Values.image.tag) }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
@@ -45,6 +48,9 @@ spec:
             {{- end }}
             {{- end }}
           {{- end }}
+
+          # VALIDATION FIX: livenessProbe hits /health (process alive — no DB check)
+          # readinessProbe hits /ready (DB Ping — only serve traffic when DB reachable)
           livenessProbe:
             httpGet:
               path: /health
@@ -55,11 +61,52 @@ spec:
             failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /health
+              path: /ready        # ← VALIDATION FIX: was /health, never checked DB
               port: http
-            initialDelaySeconds: 5
+            initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
+
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+
+        # ── Cloud SQL Auth Proxy sidecar ───────────────────────────────────
+        # VALIDATION FIX: Without this sidecar, POSTGRES_DSN → 127.0.0.1:5432
+        # leads to connection refused. The proxy handles mTLS to Cloud SQL.
+        {{- if .Values.cloudSqlProxy.enabled }}
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.3-alpine
+          args:
+            - "--port={{ .Values.cloudSqlProxy.port }}"
+            - "--structured-logs"
+            - "--health-check"
+            - "--http-port=9090"
+            - {{ .Values.cloudSqlProxy.instanceConnectionName | quote }}
+          ports:
+            - name: healthcheck
+              containerPort: 9090
+          livenessProbe:
+            httpGet:
+              path: /liveness
+              port: 9090
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readiness
+              port: 9090
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+        {{- end }}

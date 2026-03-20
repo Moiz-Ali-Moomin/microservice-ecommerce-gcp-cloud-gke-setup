@@ -10,6 +10,8 @@ import (
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/logger"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"go.uber.org/zap"
 )
 
@@ -36,10 +38,14 @@ func NewProducer(brokers []string, serviceName string) (*Producer, error) {
 	config.Producer.RequiredAcks = sarama.WaitForAll // Guaranteed delivery
 	config.Producer.Retry.Max = 5                    // Retries
 	config.Producer.Retry.Backoff = 100 * time.Millisecond
-
-	// Enable idempotent producer if supported by broker version (optional, implies WaitForAll and MaxOpenRequestsInFlight=1 or 5)
+	// VALIDATION FIX: Idempotent=true requires MaxOpenRequests <= 5 (Kafka protocol).
+	// Previous value of 1 (one in-flight msg at a time) severely limited throughput.
+	// 5 is the Kafka-specified maximum for idempotent producers; WaitForAll is already set.
 	config.Producer.Idempotent = true
-	config.Net.MaxOpenRequests = 1 // Required for idempotency if not >= 0.11 (though safe default)
+	config.Net.MaxOpenRequests = 5
+	// Set explicit Kafka version to avoid protocol negotiation overhead on every connect
+	config.Version = sarama.V3_6_0_0
+
 
 	p, err := sarama.NewSyncProducer(brokers, config)
 	if err != nil {
@@ -113,9 +119,20 @@ func (p *Producer) Emit(ctx context.Context, topic string, key string, event int
 		Timestamp: time.Now(),
 	}
 
-	// Propagate Context (Tracing)
-	// Sarama supports headers. We can inject trace context.
-	// TODO: Add OpenTelemetry propagation here.
+	// RUNTIME FIX: Implement the TODO — inject W3C Trace Context into Kafka headers.
+	// Without this, every trace breaks at the Kafka async boundary. The producer
+	// span closes and consumers start disconnected root spans. Consumers must
+	// call otel.GetTextMapPropagator().Extract(ctx, KafkaHeaderCarrier(msg.Headers))
+	// to restore the parent span.
+	propagator := otel.GetTextMapPropagator()
+	carrier := kafkaHeaderCarrier{}
+	propagator.Inject(ctx, carrier)
+	for k, v := range carrier {
+		msg.Headers = append(msg.Headers, sarama.RecordHeader{
+			Key:   []byte(k),
+			Value: []byte(v),
+		})
+	}
 
 	partition, offset, err := p.producer.SendMessage(msg)
 	if err != nil {
@@ -142,3 +159,34 @@ func (p *Producer) Emit(ctx context.Context, topic string, key string, event int
 func (p *Producer) Close() error {
 	return p.producer.Close()
 }
+
+// kafkaHeaderCarrier implements propagation.TextMapCarrier for Kafka record headers.
+// It allows the OTel propagator to inject/extract W3C traceparent/tracestate.
+type kafkaHeaderCarrier map[string]string
+
+func (c kafkaHeaderCarrier) Get(key string) string        { return c[key] }
+func (c kafkaHeaderCarrier) Set(key string, value string) { c[key] = value }
+func (c kafkaHeaderCarrier) Keys() []string {
+	keys := make([]string, 0, len(c))
+	for k := range c {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// ExtractTraceFromHeaders extracts the OTel trace context from Kafka message headers.
+// Call this at the start of every consumer handler to attach spans to the producer's trace.
+//
+//	ctx = ExtractTraceFromHeaders(ctx, msg.Headers)
+//	span := otel.Tracer("service").Start(ctx, "handle-event")
+func ExtractTraceFromHeaders(ctx context.Context, headers []*sarama.RecordHeader) context.Context {
+	carrier := kafkaHeaderCarrier{}
+	for _, h := range headers {
+		carrier[string(h.Key)] = string(h.Value)
+	}
+	return otel.GetTextMapPropagator().Extract(ctx, carrier)
+}
+
+// staticCheck is a compile-time assertion that kafkaHeaderCarrier satisfies the interface.
+var _ propagation.TextMapCarrier = kafkaHeaderCarrier{}
+

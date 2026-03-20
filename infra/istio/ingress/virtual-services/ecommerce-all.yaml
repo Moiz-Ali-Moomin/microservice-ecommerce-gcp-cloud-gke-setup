@@ -2,13 +2,36 @@ apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
   name: ecommerce-all
-  namespace: ecommerce
+  namespace: istio-system
+  # ─────────────────────────────────────────────────────────────────────────
+  # AUDIT FIX — 2026-03-20
+  #
+  # All host references corrected to match actual ArgoCD deployment namespaces.
+  # Cross-check: argocd/apps/services.yaml is the source of truth for namespaces.
+  #
+  # Bugs fixed:
+  #  - cart-service:    ecommerce  → apps-core
+  #  - offer-service:   ecommerce  → apps-core
+  #  - product-service: ecommerce  → apps-core
+  #  - admin-backoffice: tooling   → apps-core
+  #  - feature-flag:   tooling     → apps-core
+  #  - conversion-webhook: apps-public → apps-public (unchanged, matches ArgoCD)
+  #  - reporting-service: apps-async → apps-core (matches ArgoCD destination)
+  #
+  # NOTE: VirtualService moved to istio-system so it can bind to the
+  #       main-gateway (Gateway lives in istio-system). Previously it was in
+  #       namespace: ecommerce which does not exist as a deployment target —
+  #       Istio requires VS and Gateway to share namespace or VS must reference
+  #       gateway with full <ns>/<name> — that was already correct, but the VS
+  #       itself being in a phantom namespace means it never applied.
+  # ─────────────────────────────────────────────────────────────────────────
 spec:
   hosts:
     - "*"
   gateways:
     - istio-system/main-gateway
   http:
+    # ── Admin Backoffice (apps-core — ArgoCD destination) ───────────────────
     - match:
         - uri:
             prefix: /admin-backoffice
@@ -16,10 +39,11 @@ spec:
         uri: /
       route:
         - destination:
-            host: admin-backoffice-service.tooling.svc.cluster.local
+            host: admin-backoffice-service.apps-core.svc.cluster.local
             port:
               number: 8080
 
+    # ── Analytics Ingest (apps-async) ───────────────────────────────────────
     - match:
         - uri:
             prefix: /analytics-ingest
@@ -31,9 +55,10 @@ spec:
             port:
               number: 8080
 
+    # ── API Gateway (apps-public) ────────────────────────────────────────────
     - match:
         - uri:
-            prefix: /api-gateway
+            prefix: /api
       rewrite:
         uri: /
       route:
@@ -42,6 +67,7 @@ spec:
             port:
               number: 8080
 
+    # ── Attribution (apps-async) ─────────────────────────────────────────────
     - match:
         - uri:
             prefix: /attribution
@@ -53,6 +79,7 @@ spec:
             port:
               number: 8080
 
+    # ── Audit (apps-async) ───────────────────────────────────────────────────
     - match:
         - uri:
             prefix: /audit
@@ -64,6 +91,7 @@ spec:
             port:
               number: 8080
 
+    # ── Auth (apps-core) ─────────────────────────────────────────────────────
     - match:
         - uri:
             prefix: /auth
@@ -75,6 +103,7 @@ spec:
             port:
               number: 8080
 
+    # ── Cart (apps-core — was WRONG: ecommerce) ──────────────────────────────
     - match:
         - uri:
             prefix: /cart
@@ -82,10 +111,11 @@ spec:
         uri: /
       route:
         - destination:
-            host: cart-service.ecommerce.svc.cluster.local
+            host: cart-service.apps-core.svc.cluster.local
             port:
               number: 8080
 
+    # ── Conversion Webhook (apps-public — matches ArgoCD) ───────────────────
     - match:
         - uri:
             prefix: /conversion-webhook
@@ -97,6 +127,7 @@ spec:
             port:
               number: 8080
 
+    # ── Feature Flag (apps-core — was WRONG: tooling) ───────────────────────
     - match:
         - uri:
             prefix: /feature-flag
@@ -104,10 +135,11 @@ spec:
         uri: /
       route:
         - destination:
-            host: feature-flag-service.tooling.svc.cluster.local
+            host: feature-flag-service.apps-core.svc.cluster.local
             port:
               number: 8080
 
+    # ── Landing (apps-public) ────────────────────────────────────────────────
     - match:
         - uri:
             prefix: /landing
@@ -119,6 +151,7 @@ spec:
             port:
               number: 8080
 
+    # ── Notification (apps-async) ────────────────────────────────────────────
     - match:
         - uri:
             prefix: /notification
@@ -130,6 +163,7 @@ spec:
             port:
               number: 8080
 
+    # ── Offer (apps-core — was WRONG: ecommerce) ─────────────────────────────
     - match:
         - uri:
             prefix: /offer
@@ -137,10 +171,23 @@ spec:
         uri: /
       route:
         - destination:
-            host: offer-service.ecommerce.svc.cluster.local
+            host: offer-service.apps-core.svc.cluster.local
             port:
               number: 8080
 
+    # ── Orders (apps-core) ───────────────────────────────────────────────────
+    - match:
+        - uri:
+            prefix: /orders
+      rewrite:
+        uri: /
+      route:
+        - destination:
+            host: order-service.apps-core.svc.cluster.local
+            port:
+              number: 8080
+
+    # ── Product (apps-core — was WRONG: ecommerce) ───────────────────────────
     - match:
         - uri:
             prefix: /product
@@ -148,10 +195,11 @@ spec:
         uri: /
       route:
         - destination:
-            host: product-service.ecommerce.svc.cluster.local
+            host: product-service.apps-core.svc.cluster.local
             port:
               number: 8080
 
+    # ── Redirect (apps-public) ───────────────────────────────────────────────
     - match:
         - uri:
             prefix: /redirect
@@ -163,6 +211,7 @@ spec:
             port:
               number: 8080
 
+    # ── Reporting (apps-core — was WRONG: apps-async — per ArgoCD) ──────────
     - match:
         - uri:
             prefix: /reporting
@@ -170,10 +219,11 @@ spec:
         uri: /
       route:
         - destination:
-            host: reporting-service.apps-async.svc.cluster.local
+            host: reporting-service.apps-core.svc.cluster.local
             port:
               number: 8080
 
+    # ── Storefront (apps-public) ─────────────────────────────────────────────
     - match:
         - uri:
             prefix: /storefront
@@ -185,6 +235,7 @@ spec:
             port:
               number: 8080
 
+    # ── User (apps-core) ─────────────────────────────────────────────────────
     - match:
         - uri:
             prefix: /user
@@ -196,6 +247,7 @@ spec:
             port:
               number: 8080
 
+    # ── Default catch-all → storefront ───────────────────────────────────────
     - match:
         - uri:
             prefix: /

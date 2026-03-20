@@ -35,16 +35,15 @@ func main() {
 
 	brokers := strings.Split(os.Getenv("KAFKA_BROKERS"), ",")
 	if len(brokers) == 0 || brokers[0] == "" {
-		brokers = []string{"kafka:9092"}
+		// AUDIT FIX: correct Strimzi bootstrap service for cluster "kafka-cluster"
+		// Old value "kafka:9092" resolves to nothing — no K8s service named "kafka"
+		brokers = []string{"kafka-cluster-kafka-bootstrap.kafka:9092"}
 	}
 
-	// We create producers for allowed topics on demand or pre-init map
-	// For simplicity, let's assume one producer for 'raw.analytics' or dynamic
-	// Master Prompt says "page.viewed", etc. We'll map dynamic here.
-
-	// Pre-create producers
+	// Pre-create producers for topics this service is authorised to write to.
+	// Topic names must match KafkaTopic CRDs in infra/kafka/topics/
 	producers := make(map[string]*event.Producer)
-	topics := []string{"page.viewed", "cta.clicked", "user.signup", "checkout.completed"}
+	topics := []string{"page.viewed", "cta.clicked", "checkout.completed"}
 
 	for _, t := range topics {
 		p, err := event.NewProducer(brokers, t)

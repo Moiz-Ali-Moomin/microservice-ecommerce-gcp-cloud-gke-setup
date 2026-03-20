@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/order-service/internal/db"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/apierror"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/event"
 	"github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/logger"
@@ -19,28 +20,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
-)
-
-type Order struct {
-	ID             string    `json:"id"`
-	UserID         string    `json:"user_id"`
-	Items          []Item    `json:"items"`
-	Total          float64   `json:"total"`
-	Status         string    `json:"status"`
-	IdempotencyKey string    `json:"-"` // stored internally, not exposed in response
-	CreatedAt      time.Time `json:"created_at"`
-}
-
-type Item struct {
-	ProductID string  `json:"product_id"`
-	Quantity  int     `json:"quantity"`
-	Price     float64 `json:"price"`
-}
-
-// In production, replace with PostgreSQL/Redis persistence.
-var (
-	orders          = make(map[string]Order)
-	idempotencyKeys = make(map[string]string) // idempotency-key → order ID
 )
 
 func main() {
@@ -53,6 +32,29 @@ func main() {
 	}
 	defer func() { _ = tp.Shutdown(context.Background()) }()
 
+	// ── PostgreSQL (R1: replaces in-memory map) ────────────────────────────
+	// POSTGRES_DSN injected via ExternalSecret → api-gateway-secrets.POSTGRES_DSN
+	// or order-service-specific order-service-secrets.POSTGRES_DSN.
+	dsn := os.Getenv("POSTGRES_DSN")
+	if dsn == "" {
+		logger.Log.Fatal("POSTGRES_DSN env var is required")
+	}
+
+	startupCtx, startupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer startupCancel()
+
+	repo, err := db.NewRepository(startupCtx, dsn, logger.Log)
+	if err != nil {
+		logger.Log.Fatal("Failed to connect to PostgreSQL", zap.Error(err))
+	}
+	defer repo.Close()
+
+	// Run idempotent schema migration (safe on every deploy)
+	if err := repo.Migrate(startupCtx); err != nil {
+		logger.Log.Fatal("Schema migration failed", zap.Error(err))
+	}
+
+	// ── Kafka producer ─────────────────────────────────────────────────────
 	brokers := strings.Split(os.Getenv("KAFKA_BROKERS"), ",")
 	if len(brokers) == 0 || brokers[0] == "" {
 		brokers = []string{"kafka-cluster-kafka-bootstrap.kafka:9092"}
@@ -65,29 +67,30 @@ func main() {
 		defer producer.Close()
 	}
 
-	// Rate limiter: 100 req/s per IP, burst of 20
+	// ── HTTP server ─────────────────────────────────────────────────────────
 	rateLimiter := middleware.NewRateLimiter(100, 20)
-
 	mux := http.NewServeMux()
 
-	// ── Observability endpoints ──────────────────────────────────────────────
 	mux.Handle("/metrics", promhttp.Handler())
-
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"}) //nolint:errcheck
 	})
-
 	mux.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
+		// Readiness: DB must be reachable
+		pingCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if err := repo.Ping(pingCtx); err != nil {
+			http.Error(w, `{"status":"db_unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"status": "ready"}) //nolint:errcheck
 	})
 
-	// ── API v1 Routes ────────────────────────────────────────────────────────
-
-	// POST /v1/orders — Create Order (with idempotency key)
+	// POST /v1/orders
 	mux.HandleFunc("POST /v1/orders", func(w http.ResponseWriter, r *http.Request) {
 		requestID := r.Header.Get("X-Request-ID")
 		if requestID == "" {
@@ -95,29 +98,13 @@ func main() {
 		}
 		w.Header().Set("X-Request-ID", requestID)
 
-		// ── Idempotency check ────────────────────────────────────────────────
-		idempotencyKey := r.Header.Get("X-Idempotency-Key")
-		if idempotencyKey != "" {
-			if existingOrderID, ok := idempotencyKeys[idempotencyKey]; ok {
-				// Return the existing order — same request, idempotent
-				if order, exists := orders[existingOrderID]; exists {
-					w.Header().Set("Content-Type", "application/json")
-					w.Header().Set("X-Idempotent-Replayed", "true")
-					w.WriteHeader(http.StatusOK)
-					json.NewEncoder(w).Encode(order) //nolint:errcheck
-					return
-				}
-			}
-		}
-
-		// ── Input parsing ────────────────────────────────────────────────────
-		var order Order
+		var order db.Order
 		if err := json.NewDecoder(r.Body).Decode(&order); err != nil {
 			apierror.BadRequest(w, "Request body must be valid JSON.", requestID)
 			return
 		}
 
-		// ── Input validation ─────────────────────────────────────────────────
+		// Validation
 		if order.UserID == "" {
 			apierror.ValidationError(w, "Field 'user_id' is required.", requestID)
 			return
@@ -128,77 +115,80 @@ func main() {
 		}
 		for i, item := range order.Items {
 			if item.ProductID == "" {
-				apierror.ValidationError(w, fmt.Sprintf("Item at index %d is missing 'product_id'.", i), requestID)
+				apierror.ValidationError(w, fmt.Sprintf("Item %d missing 'product_id'", i), requestID)
 				return
 			}
 			if item.Quantity <= 0 {
-				apierror.ValidationError(w, fmt.Sprintf("Item at index %d must have 'quantity' > 0.", i), requestID)
+				apierror.ValidationError(w, fmt.Sprintf("Item %d must have quantity > 0", i), requestID)
 				return
 			}
 			if item.Price < 0 {
-				apierror.ValidationError(w, fmt.Sprintf("Item at index %d must have 'price' >= 0.", i), requestID)
+				apierror.ValidationError(w, fmt.Sprintf("Item %d must have price >= 0", i), requestID)
 				return
 			}
 		}
 
-		// ── Create the order ─────────────────────────────────────────────────
+		// Populate system fields
 		order.ID = uuid.New().String()
 		order.Status = "PENDING"
-		order.CreatedAt = time.Now().UTC()
-		order.IdempotencyKey = idempotencyKey
-		orders[order.ID] = order
+		order.IdempotencyKey = r.Header.Get("X-Idempotency-Key")
 
-		if idempotencyKey != "" {
-			idempotencyKeys[idempotencyKey] = order.ID
+		// ── Persist to PostgreSQL (ACID, idempotent) ────────────────────────
+		saved, err := repo.Create(r.Context(), order)
+		if err != nil {
+			logger.Log.Error("Failed to persist order", zap.Error(err), zap.String("order_id", order.ID))
+			apierror.InternalServerError(w, requestID)
+			return
 		}
 
-		// ── Emit Kafka event (async, non-blocking) ──────────────────────────
+		// ── Emit typed Kafka event (async, non-blocking) ────────────────────
 		if producer != nil {
-			go func(o Order) {
+			go func(o db.Order) {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
-				evt := event.Event{
-					EventID:   uuid.New().String(),
-					Timestamp: time.Now(),
-					Service:   "order-service",
-					Metadata: map[string]interface{}{
-						"order_id": o.ID,
-						"user_id":  o.UserID,
-						"total":    o.Total,
+				evt := event.CheckoutCompleted{
+					Metadata: event.Metadata{
+						EventID:     uuid.New().String(),
+						EventType:   event.TypeCheckoutCompleted,
+						ServiceName: "order-service",
+						UserID:      o.UserID,
+						Timestamp:   time.Now().UTC(),
+						Version:     "1",
 					},
+					OrderID:     o.ID,
+					TotalAmount: o.Total,
+					Currency:    o.Currency,
 				}
-				if err := producer.Emit(ctx, "checkout.completed", o.ID, evt); err != nil {
-					logger.Log.Error("Failed to emit order event",
-						zap.Error(err),
-						zap.String("order_id", o.ID),
-					)
+				if err := producer.Emit(ctx, event.TypeCheckoutCompleted, o.ID, evt); err != nil {
+					logger.Log.Error("Failed to emit checkout event",
+						zap.Error(err), zap.String("order_id", o.ID))
 				}
-			}(order)
+			}(saved)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(order) //nolint:errcheck
-	})
-
-	// GET /v1/orders — List Orders
-	mux.HandleFunc("GET /v1/orders", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		orderList := make([]Order, 0, len(orders))
-		for _, o := range orders {
-			orderList = append(orderList, o)
+		statusCode := http.StatusCreated
+		// If idempotency key matched an existing order, return 200 not 201
+		if saved.ID != order.ID {
+			statusCode = http.StatusOK
+			w.Header().Set("X-Idempotent-Replayed", "true")
 		}
-		json.NewEncoder(w).Encode(orderList) //nolint:errcheck
+		w.WriteHeader(statusCode)
+		json.NewEncoder(w).Encode(saved) //nolint:errcheck
 	})
 
-	// GET /v1/orders/{id} — Get Order by ID
+	// GET /v1/orders/{id}
 	mux.HandleFunc("GET /v1/orders/{id}", func(w http.ResponseWriter, r *http.Request) {
 		requestID := r.Header.Get("X-Request-ID")
 		id := r.PathValue("id")
 
-		order, ok := orders[id]
-		if !ok {
-			apierror.NotFound(w, "order", id, requestID)
+		order, err := repo.GetByID(r.Context(), id)
+		if err != nil {
+			if err == db.ErrNotFound {
+				apierror.NotFound(w, "order", id, requestID)
+				return
+			}
+			apierror.InternalServerError(w, requestID)
 			return
 		}
 
@@ -206,12 +196,25 @@ func main() {
 		json.NewEncoder(w).Encode(order) //nolint:errcheck
 	})
 
-	// Apply rate limiting to all API routes
-	rateLimitedMux := rateLimiter.RateLimit(mux)
+	// GET /v1/orders?user_id=xxx
+	mux.HandleFunc("GET /v1/orders", func(w http.ResponseWriter, r *http.Request) {
+		userID := r.URL.Query().Get("user_id")
+		if userID == "" {
+			apierror.ValidationError(w, "Query param 'user_id' is required.", r.Header.Get("X-Request-ID"))
+			return
+		}
+		orders, err := repo.ListByUser(r.Context(), userID)
+		if err != nil {
+			apierror.InternalServerError(w, r.Header.Get("X-Request-ID"))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(orders) //nolint:errcheck
+	})
 
 	srv := &http.Server{
 		Addr:              ":8080",
-		Handler:           rateLimitedMux,
+		Handler:           rateLimiter.RateLimit(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,

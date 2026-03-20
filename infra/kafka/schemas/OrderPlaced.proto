@@ -1,29 +1,45 @@
 syntax = "proto3";
 
-// This strict Protobuf schema defines the contract for Order Creation events.
-// This prevents downstream consumers (e.g., Notification Service, Analytics)
-// from crashing due to unexpected "poison pill" JSON formatting changes.
+// ┌──────────────────────────────────────────────────────────────────────────┐
+// │  DEPRECATED — DO NOT USE                                                 │
+// │                                                                           │
+// │  This proto schema is NOT used anywhere in the codebase. The event       │
+// │  contract for checkout events is defined in Go via:                      │
+// │                                                                           │
+// │      shared-lib/pkg/event/events.go  →  CheckoutCompleted struct         │
+// │                                                                           │
+// │  Canonical wire format is JSON (not proto binary).                       │
+// │                                                                           │
+// │  This file is kept for historical reference only. If a proto/gRPC        │
+// │  interface is needed in the future, generate from the Go struct using    │
+// │  `protoc-gen-go` with the `CheckoutCompleted` message as the source of   │
+// │  truth — not this file.                                                  │
+// │                                                                           │
+// │  See ADR: docs/adr/002-event-serialization.md                            │
+// └──────────────────────────────────────────────────────────────────────────┘
 
 package ecommerce.events;
 
-option go_package = "github.com/my-project/ecommerce-repo/shared-lib/pkg/events";
+option go_package = "github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib/pkg/events";
 
-// Define the schema for the OrderPlaced event payload
-message OrderPlaced {
-  string order_id = 1;
-  string tenant_id = 2; // Crucial for Multi-Tenant Data Isolation (RLS boundaries)
-  
-  string user_id = 3;
-  double total_amount = 4;
-  string currency = 5;
-  
-  int64 timestamp_utc = 6;
-  
-  repeated OrderItem items = 7;
+// CheckoutCompleted matches the Go event.CheckoutCompleted struct in events.go.
+// Both must stay in sync if proto serialization is ever adopted.
+message CheckoutCompleted {
+  // Standard metadata fields (maps to event.Metadata)
+  string event_id       = 1;
+  string event_type     = 2;   // always "checkout.completed"
+  string service_name   = 3;   // "order-service"
+  string user_id        = 4;
+  string correlation_id = 5;
+  int64  timestamp_utc  = 6;   // Unix nanoseconds
+  string version        = 7;   // schema version
+
+  // Business fields
+  string order_id      = 8;
+  double total_amount  = 9;
+  string currency      = 10;
+  string cart_id       = 11;
 }
 
-message OrderItem {
-  string product_id = 1;
-  int32 quantity = 2;
-  double unit_price = 3;
-}
+// REMOVED: OrderPlaced (was misaligned with actual emitted events)
+// Use CheckoutCompleted above as the canonical checkout event.

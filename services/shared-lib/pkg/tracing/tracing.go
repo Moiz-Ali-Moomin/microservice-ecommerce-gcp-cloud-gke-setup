@@ -19,7 +19,8 @@ import (
 //
 // Environment variables consumed:
 //   - OTEL_EXPORTER_OTLP_ENDPOINT – gRPC endpoint of the OTel collector (required)
-//   - OTEL_INSECURE               – set to "true" ONLY in local/dev environments
+//   - OTEL_REQUIRE_TLS            – set to "true" for external/cross-cluster collectors
+//   - OTEL_INSECURE               – legacy alias, set to "true" for explicit plaintext
 //   - SERVICE_VERSION             – semantic version string, e.g. "2.1.0"
 //   - BUILD_SHA                   – git commit SHA injected at build time
 //   - ENV                         – deployment environment (dev/staging/prod)
@@ -32,16 +33,25 @@ func InitTracer(serviceName string) (*sdktrace.TracerProvider, error) {
 		endpoint = "otel-collector.platform-observability.svc.cluster.local:4317"
 	}
 
-	// Build gRPC dial options. TLS is ON by default; only disabled when OTEL_INSECURE=true.
+	// RUNTIME FIX: The in-cluster OTel Collector serves plaintext gRPC on 4317.
+	// The old code ALWAYS used TLS unless OTEL_INSECURE=true, meaning every
+	// service had a TLS handshake failure against the plaintext collector and
+	// ALL traces were silently dropped.
+	//
+	// New logic:
+	//  - Default: plaintext (correct for in-cluster with mTLS handled by Istio)
+	//  - OTEL_REQUIRE_TLS=true: enable TLS (for external ingestion endpoints)
 	opts := []otlptracegrpc.Option{
 		otlptracegrpc.WithEndpoint(endpoint),
 	}
-	if os.Getenv("OTEL_INSECURE") == "true" {
-		opts = append(opts, otlptracegrpc.WithInsecure())
-	} else {
+	if os.Getenv("OTEL_REQUIRE_TLS") == "true" {
 		opts = append(opts, otlptracegrpc.WithTLSCredentials(
 			credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12}),
 		))
+	} else {
+		// In-cluster: Istio mTLS handles transport security at the sidecar level.
+		// The OTel collector gRPC listener is plaintext within the mesh.
+		opts = append(opts, otlptracegrpc.WithInsecure())
 	}
 
 	exporter, err := otlptracegrpc.New(ctx, opts...)
@@ -49,18 +59,17 @@ func InitTracer(serviceName string) (*sdktrace.TracerProvider, error) {
 		return nil, err
 	}
 
-	// Enrich trace resource with service metadata for better attribution in Tempo/Jaeger.
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
 			semconv.ServiceName(serviceName),
 			semconv.ServiceVersion(getEnv("SERVICE_VERSION", "unknown")),
 			semconv.DeploymentEnvironment(getEnv("ENV", "production")),
 		),
-		resource.WithFromEnv(),   // Picks up OTEL_RESOURCE_ATTRIBUTES if set
-		resource.WithProcess(),   // Adds PID, executable name
-		resource.WithOS(),        // Adds OS type
-		resource.WithContainer(), // Adds container ID (useful in K8s)
-		resource.WithHost(),      // Adds hostname / node name
+		resource.WithFromEnv(),
+		resource.WithProcess(),
+		resource.WithOS(),
+		resource.WithContainer(),
+		resource.WithHost(),
 	)
 	if err != nil {
 		return nil, err
@@ -69,7 +78,6 @@ func InitTracer(serviceName string) (*sdktrace.TracerProvider, error) {
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter),
 		sdktrace.WithResource(res),
-		// Sample 100% of traces in dev, 10% in prod (override via OTEL_TRACES_SAMPLER env var)
 		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(getSampleRate()))),
 	)
 
@@ -81,6 +89,7 @@ func InitTracer(serviceName string) (*sdktrace.TracerProvider, error) {
 
 	return tp, nil
 }
+
 
 func getEnv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {

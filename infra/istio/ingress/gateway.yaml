@@ -7,9 +7,27 @@ spec:
   selector:
     istio: ingressgateway
   servers:
+    # ── HTTPS (primary) ─────────────────────────────────────────────────────
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      tls:
+        mode: SIMPLE
+        # Certificate mounted from secret istio-ingressgateway-certs
+        # (created by cert-manager or imported from GCP Certificate Manager)
+        credentialName: istio-ingressgateway-certs
+      hosts:
+        - "*"
+
+    # ── HTTP → HTTPS redirect ────────────────────────────────────────────────
+    # AUDIT FIX: Gateway was HTTP-only. Production traffic MUST be TLS.
+    # This listener accepts HTTP and issues a 301 redirect to HTTPS.
     - port:
         number: 80
         name: http
         protocol: HTTP
+      tls:
+        httpsRedirect: true
       hosts:
         - "*"

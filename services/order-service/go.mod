@@ -7,6 +7,8 @@ replace github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/se
 require (
 	github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/services/shared-lib v0.0.0-00010101000000-000000000000
 	github.com/google/uuid v1.6.0
+	github.com/jackc/pgx/v5 v5.7.2
+	github.com/prometheus/client_golang v1.20.4
 	go.uber.org/zap v1.27.0
 )
 
