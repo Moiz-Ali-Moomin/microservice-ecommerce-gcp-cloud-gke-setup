@@ -1,463 +1,526 @@
-<div align="center">
+# Ecommerce Platform — GKE Microservices
 
-# 🛒 Microservice E-Commerce Platform
+> **Production-grade, multi-cell ecommerce platform** running on GKE Autopilot. Built to handle **10M+ concurrent users** across isolated failure domains. Every layer — from network to runtime — is designed, not assumed.
 
-**Enterprise-grade, GKE-native, globally scalable e-commerce infrastructure**
-
-[![CI/CD](https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/actions/workflows/ci.yml/badge.svg)](https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-![Go Version](https://img.shields.io/badge/Go-1.24-blue)
-![Terraform](https://img.shields.io/badge/Terraform-1.6+-purple)
-
-</div>
+[![CI/CD](https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/actions/workflows/ci.yml/badge.svg)](https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup/actions/workflows/ci.yml)
 
 ---
 
-## 📐 Architecture
+## Architecture
 
-```
-╔══════════════════════════════════════════════════════════════════════════╗
-║                         INTERNET TRAFFIC                                ║
-╚══════════════════════════════════════════════════════════════════════════╝
-                                   │
-                    ┌──────────────▼──────────────┐
-                    │     Istio Ingress Gateway    │  TLS termination
-                    │     (GKE Load Balancer)      │  WAF + DDoS
-                    └──────────────┬──────────────┘
-                                   │
-                    ┌──────────────▼──────────────┐
-                    │         API Gateway          │  Rate limiting
-                    │      (Go / :8080)            │  Auth routing
-                    └──┬──┬──┬──┬──┬──┬──┬───────┘  Request ID
-                       │  │  │  │  │  │  │
-          ┌────────────┘  │  │  │  │  │  └───────────────────┐
-          │     ┌─────────┘  │  │  │  └──────────┐           │
-          ▼     ▼            ▼  │  ▼             ▼           ▼
-    ┌─────────┐ ┌──────────┐   │  ┌──────────┐ ┌──────────┐ ┌──────────┐
-    │  Auth   │ │  Order   │   │  │  Cart    │ │  User    │ │Storefront│
-    │ Service │ │ Service  │   │  │ Service  │ │ Service  │ │   Web    │
-    └────┬────┘ └────┬─────┘   │  └────┬─────┘ └────┬─────┘ └──────────┘
-         │           │         │       │             │
-         └─────┬─────┘    ┌────▼────┐  └──────┬──────┘
-               │          │ Product │         │
-               │          │ Service │         │
-               │          └─────────┘         │
-               ▼                              ▼
-    ┌───────────────────────────────────────────────┐
-    │                 DATA LAYER                    │
-    │  ┌──────────────┐  ┌──────┐  ┌────────────┐  │
-    │  │  PostgreSQL  │  │Redis │  │   Kafka    │  │
-    │  │  (Primary +  │  │Cache │  │  (Events)  │  │
-    │  │   Replicas)  │  │      │  │            │  │
-    │  └──────────────┘  └──────┘  └────────────┘  │
-    └───────────────────────────────────────────────┘
-               │
-               ▼
-    ┌───────────────────────────────────────────────┐
-    │            OBSERVABILITY PLANE                │
-    │  Prometheus → Grafana  |  Loki  |  Tempo      │
-    │  OTel Collector → Distributed Tracing         │
-    │  Alertmanager → PagerDuty / Slack             │
-    └───────────────────────────────────────────────┘
-```
+The platform is built around four principles: **cell-based isolation**, **zero-trust networking**, **GitOps delivery**, and **observable-by-default instrumentation**.
 
-### Cell-Based Scaling
+```mermaid
+graph TB
+    subgraph Internet
+        User([👤 User])
+        Webhook([🔗 Conversion Webhook])
+    end
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│                    GCP Project (Hub)                           │
-│   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
-│   │   Cell 1    │  │   Cell 2    │  │   Cell N    │          │
-│   │ GKE Region  │  │ GKE Region  │  │ GKE Region  │          │
-│   │ ~500k users │  │ ~500k users │  │ ~500k users │          │
-│   │  us-central │  │ europe-west │  │  asia-east  │          │
-│   └─────────────┘  └─────────────┘  └─────────────┘          │
-│   ArgoCD Hub  |  Anthos Fleet  |  Terraform Cells             │
-└────────────────────────────────────────────────────────────────┘
+    subgraph GCP["GCP — us-central1"]
+        GCLB[Cloud Load Balancer\nGlobal Anycast]
+
+        subgraph Cell1["Cell 1 — GKE Autopilot Cluster"]
+            IGW[Istio Ingress Gateway\nRate Limiting · mTLS]
+
+            subgraph apps_public["apps-public namespace"]
+                AGW[api-gateway]
+                SF[storefront-service]
+                RS[redirect-service]
+            end
+
+            subgraph apps_core["apps-core namespace"]
+                AUTH[auth-service]
+                USER[user-service]
+                PROD[product-service]
+                CART[cart-service]
+                ORDER[order-service\nArgo Rollouts]
+                OFFER[offer-service]
+                FLAG[feature-flag-service]
+                ADMIN[admin-backoffice]
+            end
+
+            subgraph apps_async["apps-async namespace"]
+                NOTIF[notification-service]
+                ANALYTICS[analytics-ingest]
+                AUDIT[audit-service]
+                ATTR[attribution-service]
+                RPT[reporting-service]
+                CWH[conversion-webhook]
+            end
+
+            subgraph data["data namespaces"]
+                PG[(PostgreSQL\nCloud SQL Proxy)]
+                RD[(Redis\nMemorystore)]
+            end
+
+            subgraph kafka_ns["kafka namespace"]
+                KF[Kafka\nStrimzi Operator]
+            end
+
+            subgraph observability["platform-observability"]
+                PROM[Prometheus]
+                GRAF[Grafana]
+                LOKI[Loki]
+                TEMPO[Tempo]
+                OTEL[OTel Collector]
+                BB[Blackbox Exporter]
+            end
+
+            subgraph security_ns["platform-security"]
+                FALCO[Falco\nRuntime Security]
+                KYV[Kyverno\nAdmission Control]
+            end
+
+            subgraph argocd_ns["platform-argocd"]
+                ARGO[ArgoCD\nApp-of-Apps GitOps]
+            end
+        end
+
+        GCS[(GCS Terraform State)]
+        GAR[(Artifact Registry\nSigned + SBOM attested)]
+        SM[(Secret Manager\nExternal Secrets)]
+        KMS[(Cloud KMS\nCMEK etcd)]
+    end
+
+    subgraph GitHub["GitHub"]
+        GHA[GitHub Actions CI/CD]
+        REPO[Git Repository\nSource of Truth]
+    end
+
+    User -->|HTTPS| GCLB
+    Webhook -->|HTTPS| GCLB
+    GCLB --> IGW
+    IGW -->|JWT validated| AGW
+    AGW -->|mTLS SPIFFE| AUTH
+    AGW -->|mTLS SPIFFE| PROD
+    AGW -->|mTLS SPIFFE| CART
+    AGW -->|mTLS SPIFFE| ORDER
+    ORDER -->|Kafka produce| KF
+    KF -->|Kafka consume| NOTIF
+    KF -->|Kafka consume| ANALYTICS
+    KF -->|Kafka consume| ATTR
+    ORDER --> PG
+    USER --> PG
+    CART --> RD
+    PROD --> RD
+    GHA -->|push image + SBOM| GAR
+    GHA -->|update Helm values| REPO
+    REPO -->|GitOps sync| ARGO
+    ARGO -->|deploy| Cell1
+    SM -->|External Secrets Operator| Cell1
+    OTEL -->|traces| TEMPO
+    OTEL -->|metrics| PROM
+    OTEL -->|logs| LOKI
+    FALCO -->|runtime alerts| PROM
 ```
 
 ---
 
-## 🏗️ Tech Stack
+## Request Flow: User Checkout
 
-| Layer | Technology | Version | Purpose |
-|---|---|---|---|
-| **Language** | Go | 1.24 | All microservices |
-| **Container Runtime** | Docker BuildKit + Distroless | latest | Secure, minimal images |
-| **Orchestration** | GKE Autopilot | STABLE channel | Multi-cell K8s clusters |
-| **Service Mesh** | Istio | 1.20+ | mTLS, traffic management |
-| **GitOps** | ArgoCD | 2.10+ | App-of-Apps pattern |
-| **Infrastructure** | Terraform | ≥1.6 | GCS remote state |
-| **Messaging** | Apache Kafka | 3.x | Event streaming |
-| **Cache** | Redis | 7.x | Session + cache |
-| **Database** | PostgreSQL | 15+ | Primary data store |
-| **Metrics** | Prometheus + Grafana | latest | Dashboards + alerting |
-| **Logging** | Loki + Grafana | latest | Centralized log aggregation |
-| **Tracing** | OpenTelemetry + Tempo | latest | Distributed trace storage |
-| **Secrets** | External Secrets Operator | 0.9+ | GCP Secret Manager sync |
-| **Policy** | Kyverno | 1.12+ | Image signing enforcement |
-| **CI/CD** | GitHub Actions | - | Multi-env pipeline |
-| **Code Quality** | SonarQube + revive | - | Static analysis |
-| **Security Scans** | Trivy | 0.16+ | Container + FS scanning |
-| **Image Signing** | Cosign | 2.2+ | Keyless OIDC signing |
+End-to-end path for the most critical user journey:
 
----
+```
+User → Cloud LB (anycast, TLS termination)
+     → Istio Ingress Gateway
+         [Rate limit: 5000 rps global, 500 rps/tenant]
+         [JWT verification via envoy.filters.http.jwt_authn]
+     → api-gateway (apps-public)
+         [Propagates: traceparent, x-request-id, x-b3-* headers]
+     → auth-service (mTLS SPIFFE: apps-public/sa/api-gateway-sa)
+         [Validates JWT, returns user claims]
+     → cart-service (mTLS SPIFFE)
+         [Reads cart from Redis, validates inventory against product-service]
+     → order-service (mTLS SPIFFE)
+         [Writes order to PostgreSQL (ACID transaction)]
+         [Publishes `order.placed` event → Kafka topic]
+     → Kafka (Strimzi)
+         [notification-service consumes → email/push]
+         [analytics-ingest-service consumes → ClickHouse]
+         [attribution-service consumes → campaign attribution]
+→ 200 OK returned to user (< 200ms p50 target)
+```
 
-## 🚀 Microservices
-
-| Service | Port | Responsibilities |
-|---|---|---|
-| `api-gateway` | 8080 | Routing, rate limiting, request ID injection |
-| `auth-service` | 8080 | JWT issuance, login, signup, token validation |
-| `user-service` | 8080 | User profiles, preferences |
-| `order-service` | 8080 | Order creation with idempotency, Kafka emit |
-| `cart-service` | 8080 | Shopping cart management |
-| `product-service` | 8080 | Product catalog, inventory |
-| `offer-service` | 8080 | Promotions, discount engine |
-| `storefront-service` | 3000 | BFF for the main web app |
-| `storefront-web` | 3000 | React/Next.js frontend |
-| `landing-service` | 8080 | Campaign landing pages |
-| `redirect-service` | 8080 | Click-tracking redirect |
-| `notification-service` | 8080 | Email/SMS/push notifications |
-| `reporting-service` | 8080 | Analytics + business reports |
-| `analytics-ingest-service` | 8080 | Event ingestion pipeline |
-| `attribution-service` | 8080 | Conversion attribution |
-| `audit-service` | 8080 | Compliance audit log |
-| `feature-flag-service` | 8080 | Feature flag evaluation |
-| `conversion-webhook` | 8080 | Pixel + webhook receiver |
-| `admin-backoffice-service` | 8080 | Admin panel backend |
+**Trace propagation:** Every hop injects and forwards `traceparent` (W3C Trace Context). OTel Collector enriches spans with `k8s.pod.name`, `k8s.namespace.name`, `k8s.deployment.name`. Complete end-to-end traces visible in Grafana Tempo with zero sampling loss at < 1M rps.
 
 ---
 
-## 💻 Local Development
+## Zero Trust Security Model
 
-### Prerequisites
+> **Principle:** No service trusts any other by default. Trust is earned via cryptographic identity, not network location.
+
+### Layers
+| Layer | Mechanism | What it enforces |
+|-------|-----------|-----------------|
+| **L3/L4** | Kubernetes NetworkPolicy | Pod-to-pod IP firewall at kernel level |
+| **L7 mTLS** | Istio PeerAuthentication (STRICT mesh-wide) | All inter-service traffic encrypted; plaintext rejected |
+| **Identity** | SPIFFE/SVID via Istio Citadel | Each workload gets a cryptographic identity tied to its Service Account |
+| **AuthZ** | Istio AuthorizationPolicy per-service | `auth-service` only accepts calls from `api-gateway-sa`; zero namespace-level trust |
+| **Admission** | Kyverno ClusterPolicies | Block privileged containers, enforce resource limits, require image signatures |
+| **Image integrity** | Cosign keyless + Binary Authorization | Only images signed by the CI pipeline OIDC identity can run |
+| **Runtime** | Falco eBPF | Alerts on shell spawn, unexpected syscalls, kubectl exec into prod pods |
+| **Secrets** | External Secrets + GCP Secret Manager | Zero secrets in Git; all rotated centrally |
+| **etcd** | CMEK (Cloud KMS) | Encryption at rest with customer-managed key |
+
+### Why SPIFFE over namespace trust?
+Namespace-level `AuthorizationPolicy` (`namespaces: ["apps-core"]`) is a common shortcut that creates implicit trust for every pod in that namespace. A compromised `feature-flag-service` could call `order-service`. SPIFFE principal pinning (`cluster.local/ns/apps-core/sa/cart-service-sa`) means the compromise is contained — only `cart-service` can call `order-service`.
+
+---
+
+## Reliability & Resilience
+
+### Failure Scenarios
+
+| Scenario | Detection | Response | RTO |
+|----------|-----------|----------|-----|
+| Single pod crash | Liveness probe failure → K8s restarts pod | PDB prevents full eviction; HPA maintains replica count | < 30s |
+| Service overload (>85% CPU) | HPA CPU metric | Auto-scale out; pause-pod buffer pre-warms node | < 90s |
+| Downstream timeout | Istio outlier detection (5× 5xx in 10s) | Circuit-breaker ejects host for 30s; retry hits healthy replica | < 1s |
+| Kafka broker restart | Consumer group rebalance | Strimzi rolls broker with PDB; consumers pause and resume | < 60s |
+| Database connection pool exhaustion | PgBouncer pool metrics alert | Envoy connection pool limit + alert fires; manual scale DB | < 5m |
+| Canary regression | Argo Rollouts AnalysisTemplate | Prometheus gates fail → automatic rollback to stable | < 15m |
+| Regional GCP outage | Cloud LB health checks | Multi-cell design: traffic shifts to cell-2 (manual trigger) | < 5m manual |
+| Runtime intrusion (shell exec) | Falco eBPF kernel probe | Alert to PagerDuty + Slack; correlate with audit log trace | Real-time |
+
+### Retry & Timeout Budget
+
+```
+Global defaults (EnvoyFilter):
+  timeout:    30s   # Hard upper bound on every HTTP request
+  attempts:   3
+  perTry:     8s
+  retryOn:    connect-failure, refused-stream, 503, 429
+
+order-service (per-service override):
+  timeout:    15s   # Tighter because it touches PostgreSQL
+  attempts:   3
+  perTry:     4s
+```
+
+**Retry budget math:** With 3 retries at 8s each + 30s global timeout, a request is guaranteed to resolve (success or failure) within 30s. The circuit-breaker fires at 5 consecutive 5xx in 10s, ejecting the failing host *before* retries saturate the call graph.
+
+---
+
+## Scaling Strategy
+
+### Traffic Shaping (10M Users)
+
+```
+10M users → ~500k concurrent connections (assume 50 avg sessions)
+→ ~50k rps to ingress (100 rps/session avg)
+→ Cell architecture: each cell handles 500k users max
+→ At 10M users → 20 cells across 3+ GCP regions
+```
+
+### HPA Configuration
+| Service | Min | Max | Scale Trigger |
+|---------|-----|-----|--------------|
+| api-gateway | 3 | 50 | CPU 60% |
+| auth-service | 3 | 30 | CPU 70% |
+| order-service | 5 | 40 | CPU 65% |
+| product-service | 3 | 60 | CPU 60% |
+| cart-service | 3 | 40 | CPU 65% |
+
+### Node Pool Strategy (GKE Autopilot)
+GKE Autopilot manages node provisioning automatically. For Standard clusters:
+- **On-demand nodes:** Control plane + stateful workloads (Kafka, DBs)
+- **Spot nodes (70% cheaper):** Stateless app services with PDB preventing total eviction
+- **Pause pod buffer:** Pre-allocates ~10% node capacity to eliminate cold-start latency on scale events
+
+---
+
+## Observability
+
+### Signal Coverage
+| Signal | Tool | Coverage |
+|--------|------|----------|
+| **Metrics** | Prometheus + Managed GMP | All services: RED (Rate/Errors/Duration) + USE (Utilization/Saturation/Errors) |
+| **Traces** | OTel → Tempo | Full distributed traces with W3C Trace Context propagated through all 15 services |
+| **Logs** | Loki + Cloud Logging | Structured JSON logs with `trace_id` correlated across services |
+| **Synthetic** | Blackbox Exporter | External HTTP probes on all public endpoints every 30s |
+| **Runtime** | Falco | Kernel-level syscall monitoring via eBPF |
+
+### SLO Burn Rate Alerts
+Instead of static thresholds, alerts fire based on **error budget consumption rate**:
+
+```
+Fast-burn (page immediately):
+  Error rate > 14.4× budget threshold over 1h window
+  → Monthly SLO (99.9%) burned in < 5 days → wake someone up
+
+Slow-burn (create ticket):
+  Error rate > 6× budget threshold over 6h window
+  → Monthly SLO burned in < 2 weeks → schedule remediation
+```
+
+---
+
+## CI/CD Pipeline
+
+```
+Push to main branch
+  │
+  ├─ [parallel] Tests + Coverage ≥ 80%
+  ├─ [parallel] Trivy FS Scan (CRITICAL/HIGH → block)
+  ├─ [parallel] SonarQube code quality gate
+  │
+  ▼
+  Compile all services
+  │
+  ▼ (infra changes only)
+  Terraform plan → Terraform apply (staging)
+  │
+  ▼
+  For each changed service:
+    docker buildx build (layer-cached via GHA cache)
+    cosign sign --yes (keyless OIDC attestation)
+    syft <image> -o spdx-json → cosign attest (SBOM on OCI)
+    trivy image scan (CRITICAL → block)
+  │
+  ▼
+  Update Helm values (image tag → git commit)
+  ArgoCD auto-syncs staging cluster
+  │
+  ▼ (manual approval gate: "prod" GitHub environment)
+  kubectl annotate argocd application --all refresh=hard
+  ArgoCD syncs prod cluster
+  Argo Rollouts: 5% → 20% → 50% → 100%
+    (each step gated by AnalysisTemplate Prometheus checks)
+```
+
+### Supply Chain Security
+Every production image has three verifiable properties:
+1. **Signature:** `cosign verify <image>` — signed by GitHub Actions OIDC, not a developer key
+2. **SBOM:** `cosign verify-attestation --type spdxjson <image>` — full dependency graph
+3. **Scan:** Trivy results in GitHub Security tab (SARIF upload)
+
+---
+
+## Developer Experience
+
+### One-Command Local Bootstrap
 
 ```bash
-# Required tools
-docker      >= 24.0
-docker-compose >= 2.20
-go          >= 1.24
-kubectl     >= 1.28
-helm        >= 3.14
-terraform   >= 1.6
-```
-
-### Quick Start
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup.git
+# Clone and start core services with live-reload
+git clone https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup
 cd microservice-ecommerce-gcp-cloud-gke-setup
 
-# 2. Start the full local stack (Kafka, PostgreSQL, Redis, all services)
-docker compose up -d
+# Option A: Docker Compose (no cluster, mock dependencies)
+docker-compose up
 
-# 3. Verify all services are healthy
-docker compose ps
+# Option B: Skaffold against local kind cluster (real service mesh, no cloud cost)
+kind create cluster --name ecommerce-dev
+skaffold dev --profile core     # hot-reloads api-gateway, auth, order, product, cart
 
-# 4. Test the API gateway
-curl http://localhost:8080/health
-# → {"status":"ok"}
-
-curl http://localhost:8080/ready
-# → {"status":"ready"}
+# Option C: Skaffold against remote GKE dev cluster
+export SKAFFOLD_PROFILE=gke-dev
+export SKAFFOLD_DEFAULT_REPO=us-central1-docker.pkg.dev/<project>/ecommerce-repo
+skaffold dev --profile gke-dev  # pushes to GAR, deploys to GKE dev namespace
 ```
 
-### Run Tests
+### Service Dependency Graph
+
+```
+api-gateway
+├── auth-service          (JWT validation)
+├── product-service       (catalog, search)
+│   └── offer-service     (dynamic pricing)
+├── cart-service          (session state → Redis)
+│   └── product-service   (inventory check)
+├── order-service         (checkout, payment)
+│   ├── cart-service      (cart reservation)
+│   ├── user-service      (address, profile)
+│   └── → Kafka
+│       ├── notification-service  (email/push)
+│       ├── analytics-ingest      (event warehouse)
+│       └── attribution-service   (campaign tracking)
+└── feature-flag-service  (all services, read-only)
+
+admin-backoffice
+├── user-service    (user management)
+├── order-service   (order management)
+├── reporting-service
+└── audit-service   (read)
+
+storefront-service (SSR frontend)
+├── product-service
+├── cart-service
+└── auth-service
+
+redirect-service   (marketing link tracking → attribution-service via Kafka)
+conversion-webhook (external ad platform webhooks → attribution-service)
+```
+
+---
+
+## Infrastructure
+
+### Terraform Module Structure
+
+```
+infra/terraform/
+├── gke/              # Root module (cell orchestration)
+│   ├── cell/         # Reusable GKE Autopilot cluster module
+│   │   └── main.tf   # Subnet, Cluster, Binary Auth, Workload Identity, CMEK
+│   ├── variables.tf  # Cell map, CMEK key, authorized networks
+│   └── locals.tf     # Common labels (env, cost-center, owner)
+├── gcp/              # GCP project-level resources (IAM, VPC, KMS)
+├── databases/        # Cloud SQL, Memorystore
+└── kafka/            # Strimzi bootstrap
+```
+
+**Cell-based deployment:** Each `cell` is an independent GKE Autopilot cluster with its own VPC subnet (`10.<cell_id>.0.0/16`), isolated failure domain, and independent maintenance window. Scaling is handled by adding cells to the `cells` Terraform variable — no changes to any individual module.
+
+### Namespace Layout
+
+| Namespace | Purpose |
+|-----------|---------|
+| `apps-public` | External-facing services (api-gateway, storefront, redirect) |
+| `apps-core` | Core business logic (auth, order, product, cart, user) |
+| `apps-async` | Event-driven/background services (notifications, analytics) |
+| `data` | Database proxies (Cloud SQL Auth Proxy, Redis) |
+| `kafka` | Strimzi Kafka cluster |
+| `platform-argocd` | ArgoCD control plane |
+| `platform-observability` | Prometheus, Grafana, Loki, Tempo, OTel |
+| `platform-security` | Falco, Kyverno |
+| `istio-system` | Istio control plane + ingress gateway |
+
+---
+
+## Design Decisions & Tradeoffs
+
+These are the decisions a FAANG staff engineer would ask about in a design review.
+
+### 1. GKE Autopilot vs. Standard
+**Chose Autopilot.**
+- Eliminates node pool management, OS patching, and capacity planning for node groups
+- Forces resource requests on every container → ops discipline by default
+- **Tradeoff:** No DaemonSets (affects Falco — use eBPF driver on Autopilot Sandbox), no custom kernel modules, slightly higher per-pod cost than tuned Standard node pools
+- **Why it's right here:** Autonomy at the node layer lets the team focus on service-level reliability instead of node babysitting
+
+### 2. Istio over Linkerd / Cilium
+**Chose Istio.**
+- Full L7 traffic management (retries, circuit-breakers, fault injection via VirtualService)
+- Native SPIFFE/SVID identity via Citadel
+- Argo Rollouts Istio integration for canary traffic splitting
+- **Tradeoff:** Higher memory overhead (~50MB/sidecar), more complex debug story, 10–15ms added latency per hop
+- **Why it's right here:** The traffic management and AuthorizationPolicy capabilities pay for the overhead at the scale of 15 services with complex call graphs
+
+### 3. Kafka vs. Cloud Pub/Sub
+**Chose Kafka (Strimzi).**
+- Consumer group semantics with offset control (exactly-once semantics for order events)
+- Log compaction for event sourcing patterns
+- Multi-consumer fan-out (same `order.placed` event consumed by 3 services independently)
+- **Tradeoff:** Operational overhead of Strimzi operator vs. fully-managed Pub/Sub. No auto-scaling of broker storage without manual partition management
+- **Why it's right here:** Attribution, analytics, and notifications all need to independently replay events. Pub/Sub's at-least-once delivery without offset control would require idempotency at every consumer
+
+### 4. ArgoCD App-of-Apps vs. Flux
+**Chose ArgoCD App-of-Apps.**
+- Single-pane-of-glass UI for 15 services across 3 environments
+- Native Argo Rollouts integration for canary analysis
+- ApplicationSet for PR preview environments (future)
+- **Tradeoff:** ArgoCD RBAC is coarser than Flux's kustomization-level RBAC; ArgoCD controller is a single point of failure (mitigated by HA mode)
+
+### 5. Per-service SPIFFE AuthZ vs. Namespace Trust
+**Chose SPIFFE principals over namespace membership.**
+- Blast radius of a compromised pod is limited to that pod's service account, not the entire namespace
+- Explicit allow-list documents the service call graph as code
+- **Tradeoff:** 16 AuthorizationPolicy manifests to maintain; adding a legitimate new caller requires a manifest change (good — it's intentional)
+
+### 6. Keyless Cosign vs. Key-based signing
+**Chose keyless (OIDC ephemeral certs via Sigstore Fulcio).**
+- No long-lived signing keys to rotate or leak
+- Identity is pinned to the exact GitHub Actions workflow file and ref
+- Audit trail in the public Rekor transparency log
+- **Tradeoff:** Dependent on Sigstore public infrastructure (can self-host for air-gapped environments); verification requires network access to Rekor
+
+### 7. Cell-based Isolation vs. Single Large Cluster
+**Chose cells (one cluster per ~500k users).**
+- A bug that causes cluster-level instability (etcd overload, node pool exhaustion) is contained to one cell
+- Independent maintenance windows prevent cascade rolling updates
+- Horizontal scaling is operational (add a Terraform cell) not technical (no resize risk)
+- **Tradeoff:** Cross-cell calls require global load balancing; multi-cell observability requires federated Prometheus or GCP Managed Prometheus as the aggregation layer
+
+---
+
+## Chaos Engineering
+
+Chaos experiments run on a schedule via Chaos Mesh:
+
+| Experiment | Target | Schedule | What it validates |
+|------------|--------|----------|-------------------|
+| `pod-chaos-order-service` | Kill 1 stable replica | Daily 02:00 UTC | PDB enforcement, HPA recovery < 90s |
+| `network-delay-auth-service` | 200ms±50ms delay | Wednesdays 03:00 UTC | Istio retry policies, JWT cache hit rate |
+| `cpu-stress-product-service` | 80% CPU on 1 pod | Fridays 04:00 UTC | HPA scale-out SLA, p95 latency under saturation |
+
+Run experiments manually:
+```bash
+kubectl apply -f infra/chaos/ -n ecommerce
+kubectl get podchaos,networkchaos,stresschaos -n ecommerce -w
+```
+
+---
+
+## FinOps
+
+- **Spot/Preemptible nodes:** Stateless app services tolerate preemption via PDB (`minAvailable: 1`) and Istio outlier detection
+- **Pause pod buffer:** Pre-warms 10% excess node capacity, eliminating 60–90s cold-start delays on HPA scale events
+- **Resource right-sizing:** `kubectl-resource-capacity` + VPA recommendation mode; current limits tuned to p99 observed usage
+- **Idle detection:** Prometheus alert `kube_deployment_status_replicas_unavailable == replicas` catches zombie deployments
+- **Cost attribution:** GKE resource labels (`cost-center`, `owner`, `environment`) flow into Cloud Billing export → BigQuery → Looker dashboard
+
+---
+
+## Makefile Quick Reference
 
 ```bash
-# All tests with race detector and coverage
-cd services && go test ./... -race -coverprofile=../coverage.out -covermode=atomic
-
-# View coverage report
-go tool cover -html=../coverage.out
-
-# Lint
-go install github.com/mgechev/revive@v1.3.7
-revive ./...
-```
-
-### Build a Single Service
-
-```bash
-docker buildx build \
-  --build-arg SERVICE_NAME=order-service \
-  --build-arg BUILD_SHA=$(git rev-parse HEAD) \
-  -t order-service:local \
-  -f Dockerfile.services .
+make build          # Build all services
+make test           # Run all tests with race detector
+make lint           # revive linter
+make helm-lint      # Lint all Helm charts
+make k8s-dry-run    # kubectl apply --dry-run=client for all infra YAML
+make tf-plan        # Terraform plan (staging)
+make tf-apply       # Terraform apply (staging)
+make chaos-run      # Apply all chaos experiments
+make chaos-delete   # Remove all chaos experiments
 ```
 
 ---
 
-## ☁️ Deployment Guide
-
-### Step 1 — Bootstrap GCP Infrastructure
-
-```bash
-# Create the Terraform remote state bucket (one-time)
-gcloud storage buckets create gs://ecommerce-tf-state \
-  --location=us-central1 \
-  --uniform-bucket-level-access \
-  --versioning
-
-# Initialise and apply
-cd infra/terraform/gke
-terraform init
-terraform plan -var="project_id=YOUR_PROJECT_ID"
-terraform apply -var="project_id=YOUR_PROJECT_ID" -auto-approve
-```
-
-### Step 2 — Bootstrap ArgoCD
-
-```bash
-# Get credentials for the new cluster
-gcloud container clusters get-credentials ecommerce-cell-1 \
-  --region us-central1 --project YOUR_PROJECT_ID
-
-# Install ArgoCD
-kubectl create namespace platform-argocd
-kubectl apply -n platform-argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-
-# Bootstrap the App-of-Apps root application
-kubectl apply -f argocd/root/application.yaml
-```
-
-### Step 3 — CI/CD Secrets
-
-Configure the following secrets in **GitHub → Settings → Secrets and variables → Actions**:
-
-| Secret | Description |
-|---|---|
-| `GCP_PROJECT_ID` | Your GCP project ID |
-| `PAT_TOKEN` | GitHub Personal Access Token (write:packages scope) |
-| `SONAR_TOKEN` | SonarQube project token |
-| `SONAR_HOST_URL` | SonarQube server URL |
-
-### Step 4 — ArgoCD Application Secrets
-
-```bash
-# Create alertmanager secrets (Slack + PagerDuty)
-kubectl create secret generic alertmanager-secrets \
-  --namespace platform-observability \
-  --from-literal=SLACK_WEBHOOK_URL=https://hooks.slack.com/services/... \
-  --from-literal=SLACK_SLO_WEBHOOK_URL=https://hooks.slack.com/services/... \
-  --from-literal=PAGERDUTY_ROUTING_KEY=your-routing-key
-```
-
----
-
-## 🔐 Environment Variables
-
-### Shared (all services)
-
-| Variable | Default | Description |
-|---|---|---|
-| `ENV` | `production` | Deployment environment (`dev`/`staging`/`prod`) |
-| `LOG_LEVEL` | `info` | Log level (`debug`/`info`/`warn`/`error`) |
-| `SERVICE_VERSION` | `unknown` | Semantic version injected at build time |
-| `BUILD_SHA` | `unknown` | Git commit SHA injected at build time |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `otel-collector...:4317` | OTel collector gRPC endpoint |
-| `OTEL_INSECURE` | `false` | Set `true` only in local dev to skip TLS |
-
-### Auth Service
-
-| Variable | Source | Description |
-|---|---|---|
-| `DB_HOST` | ConfigMap | PostgreSQL hostname |
-| `DB_PORT` | ConfigMap | PostgreSQL port (5432) |
-| `DB_NAME` | ConfigMap | Database name |
-| `DB_USER` | Secret `auth-service-secrets` | Database username |
-| `DB_PASSWORD` | Secret `auth-service-secrets` | Database password |
-| `JWT_SECRET` | Secret `auth-jwt-secret` | JWT signing key |
-| `REDIS_HOST` | ConfigMap | Redis hostname |
-| `REDIS_PASSWORD` | Secret `auth-redis-secret` | Redis auth password |
-
-### Order Service
-
-| Variable | Source | Description |
-|---|---|---|
-| `KAFKA_BROKERS` | ConfigMap | Comma-separated Kafka broker list |
-
----
-
-## 📡 API Reference
-
-All endpoints are prefixed `/v1` through the API Gateway at port 8080.
-
-### Health / Observability
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/health` | Liveness probe — always 200 if process is alive |
-| `GET` | `/ready` | Readiness probe — 200 when fully initialised |
-| `GET` | `/metrics` | Prometheus metrics endpoint |
-
-### Auth (`/v1/auth`)
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/v1/signup` | Register a new user |
-| `POST` | `/v1/login` | Authenticate, returns JWT |
-| `GET` | `/v1/validate` | Validate a JWT token |
-
-### Orders (`/v1/orders`)
-
-| Method | Path | Headers | Description |
-|---|---|---|---|
-| `POST` | `/v1/orders` | `X-Idempotency-Key` | Create an order (idempotent) |
-| `GET` | `/v1/orders` | - | List all orders |
-| `GET` | `/v1/orders/{id}` | - | Get order by ID |
-
-### Error Response Format
-
-```json
-{
-  "error": {
-    "code": "ORDER_NOT_FOUND",
-    "message": "The order 'abc-123' was not found.",
-    "request_id": "req-20260320191555.123456789"
-  }
-}
-```
-
----
-
-## 📈 Scaling Strategy
-
-### Horizontal Pod Autoscaling
-
-All stateless services scale on CPU (70%) and Memory (80%):
-
-| Service | Min | Max | Scale-Up Window | Scale-Down Cooldown |
-|---|---|---|---|---|
-| `api-gateway` | 2 | 20 | 60s | 5 min |
-| `order-service` | 2 | 15 | Immediate | 5 min |
-| `auth-service` | 2 | 10 | 30s | 5 min |
-| `cart-service` | 2 | 10 | 60s | 5 min |
-
-### Cell-Based Global Scaling
-
-Each **Cell** = 1 GKE Autopilot cluster handling ~500k concurrent users.  
-Add cells by expanding `var.cells` in Terraform and ArgoCD auto-syncs all manifests.
-
-```hcl
-# Add a new EMEA cell to infra/terraform/gke/variables.tf
-cells = {
-  "cell-1" = { cell_id = 1, region = "us-central1" }
-  "cell-2" = { cell_id = 2, region = "europe-west4" }  # ← new EMEA cell
-}
-```
-
----
-
-## 🛡️ SLOs & SLAs
-
-| SLO | Target | Alert Window |
-|---|---|---|
-| API Availability | 99.9% | 1h (fast-burn) / 6h (slow-burn) |
-| P95 Latency | < 500ms | 1h fast-burn |
-| P99 Latency | < 1s | 5m threshold |
-| Kafka Consumer Lag | < 10k | 5m threshold |
-
-### Alerting Routing
+## Repository Structure
 
 ```
-CRITICAL (SLO fast-burn, crash loop, endpoint down)  →  PagerDuty + Slack #slo-burn
-WARNING  (SLO slow-burn, high CPU/memory, lag)        →  Slack #alerts-warning
+.
+├── .github/workflows/       # CI/CD: ci.yml, pr-checks.yml
+├── argocd/
+│   ├── apps/                # ArgoCD Application manifests (incl. Falco)
+│   ├── bootstrap/           # App-of-Apps bootstrap
+│   └── projects/            # ArgoCD Projects (RBAC)
+├── infra/
+│   ├── chaos/               # Chaos Mesh experiments (3 scenarios)
+│   ├── istio/
+│   │   ├── security/
+│   │   │   ├── authorization-policies/   # Per-service SPIFFE AuthZ (16 services)
+│   │   │   ├── destination-rules/
+│   │   │   └── peer-authentication.yaml  # STRICT mTLS mesh-wide
+│   │   ├── resilience/                   # Global DR + per-service overrides
+│   │   └── rate-limiting/               # Edge EnvoyFilter (5000 rps)
+│   ├── observability/
+│   │   ├── prometheus/alert-rules.yaml  # Golden signals + SLO burn rate
+│   │   ├── slos/                         # OpenSLO SLO definitions
+│   │   ├── grafana/dashboards/          # Golden signals dashboard
+│   │   ├── loki/ · tempo/ · otel-collector/ · blackbox/
+│   │   └── alertmanager/
+│   ├── rollouts/
+│   │   ├── order-service-rollout.yaml   # Canary with AnalysisTemplate gates
+│   │   └── order-service-analysis.yaml  # Prometheus: error rate + p95 + success rate
+│   ├── security/
+│   │   ├── falco-values.yaml            # Runtime security (5 custom ecommerce rules)
+│   │   └── kyverno/                    # Admission: image signature enforcement
+│   ├── scaling/                         # HPA + PDB templates
+│   └── terraform/                       # GKE cell modules, Cloud SQL, Kafka
+├── services/                            # 15 Go microservices + shared-lib
+├── skaffold.yaml                        # One-command local dev (ko builder + 3 profiles)
+└── docker-compose.yml                   # Local mock environment
 ```
-
----
-
-## 🔁 Failure Handling & Runbooks
-
-### Circuit Breaker
-
-All outbound service calls use the built-in circuit breaker (`shared-lib/pkg/resilience`):
-
-- **CLOSED** → normal operation
-- **OPEN** → fast-fail after 5 consecutive failures; returns `503` to caller
-- **HALF-OPEN** → single probe after 30s timeout; recovers to CLOSED on success
-
-### Retry Policy
-
-```go
-resilience.Do(ctx, resilience.RetryConfig{
-    MaxAttempts:  3,
-    InitialDelay: 100 * time.Millisecond,
-    MaxDelay:     5 * time.Second,
-    Multiplier:   2.0,
-    Jitter:       0.2,
-}, callDownstream)
-```
-
-### Graceful Shutdown
-
-All services handle `SIGTERM` with a **30-second drain window**:
-1. `/ready` returns `503` immediately → load balancer stops routing new traffic
-2. In-flight requests are allowed to complete (max 30s)
-3. Kafka producer flushes pending messages
-4. OTel tracer flushes pending spans
-5. Process exits 0
-
-### Common Runbooks
-
-| Scenario | Runbook Link |
-|---|---|
-| High error rate | `https://wiki.internal/runbooks/high-error-rate` |
-| High latency | `https://wiki.internal/runbooks/high-latency` |
-| SLO fast-burn | `https://wiki.internal/runbooks/slo-fast-burn` |
-| Pod crash loop | `https://wiki.internal/runbooks/pod-crash-loop` |
-| Endpoint down | `https://wiki.internal/runbooks/endpoint-down` |
-
----
-
-## 🔒 Security Architecture
-
-| Control | Implementation |
-|---|---|
-| **Zero Trust Networking** | Istio mTLS + NetworkPolicy default-deny |
-| **Pod Security** | K8s restricted PSS (no root, no privilege escalation) |
-| **Image Supply Chain** | Cosign keyless signing + Kyverno admission policy |
-| **Container Scanning** | Trivy (FS scan on PR, container image scan post-push) |
-| **Secrets Management** | External Secrets Operator → GCP Secret Manager |
-| **Workload Identity** | GKE Workload Identity (no service account keys) |
-| **etcd Encryption** | CMEK via Cloud KMS (configurable per cell) |
-| **OIDC CI Auth** | GitHub Actions Workload Identity — no long-lived keys |
-
----
-
-## 🧪 Testing
-
-```bash
-# Unit + integration tests with race detector
-cd services
-go test ./... -race -count=1
-
-# Coverage report
-go test ./... -coverprofile=coverage.out -covermode=atomic
-go tool cover -func=coverage.out
-
-# CI enforces ≥80% total coverage
-```
-
-### Test Coverage by Package
-
-| Package | What's Tested |
-|---|---|
-| `shared-lib/pkg/middleware` | Chain order, Metrics recording, Rate limiter (allow/block), RequestID |
-| `shared-lib/pkg/resilience` | Retry (5 cases), Circuit breaker (6 state transitions) |
-
----
-
-## 🤝 Contributing
-
-1. Fork → feature branch → PR to `main`
-2. All PRs require: tests pass + coverage ≥80% + Trivy clean + SonarQube gate
-3. Staging deploys automatically on merge; prod requires manual approval
-
----
-
-<div align="center">
-Built with ❤️ for production scale · Go 1.24 · GKE Autopilot · ArgoCD GitOps
-</div>

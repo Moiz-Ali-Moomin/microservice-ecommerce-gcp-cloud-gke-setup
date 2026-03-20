@@ -1,0 +1,176 @@
+# infra/security/falco-values.yaml
+#
+# Falco Helm chart values — runtime security for the ecommerce platform.
+# Deployed via the ArgoCD Application: falco-app.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# Falco watches kernel syscalls via eBPF and alerts on:
+#   - Unexpected shell spawn inside containers
+#   - Privilege escalation attempts
+#   - Unexpected network connections from pods
+#   - File writes to sensitive paths
+# ─────────────────────────────────────────────────────────────────────────────
+
+image:
+  registry: docker.io
+  repository: falcosecurity/falco-no-driver
+  tag: "0.38.1"
+
+# Use the modern eBPF driver (no kernel module needed on GKE)
+driver:
+  kind: modern-bpf
+  loader:
+    initContainer:
+      enabled: false
+
+# Ship Falco alerts to stdout (picked up by Cloud Logging via node fluentbit)
+falco:
+  grpc:
+    enabled: true
+    bind_address: "unix:///var/run/falco/falco.sock"
+    threadiness: 8
+
+  grpc_output:
+    enabled: true
+
+  json_output: true
+  json_include_output_property: true
+
+  log_stderr: true
+  log_syslog: false
+
+  # Tune alert thresholds to reduce noise in production
+  priority: WARNING
+
+  # Custom rules for this ecommerce platform
+  rules_file:
+    - /etc/falco/falco_rules.yaml
+    - /etc/falco/k8s_audit_rules.yaml
+    - /etc/falco/falco_rules.local.yaml
+
+# Resource allocation for GKE Autopilot
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+tolerations:
+  - operator: Exists
+    effect: NoSchedule
+
+# Custom Falco rules scoped to our ecommerce workloads
+customRules:
+  falco_rules.local.yaml: |-
+    # ── Rule: Shell spawned in ecommerce container ──────────────────────────
+    # Critical: no production container should ever spawn an interactive shell.
+    # This is the #1 indicator of container escape / credential theft.
+    - rule: Shell Spawned in Ecommerce Container
+      desc: >
+        A shell was spawned inside an ecommerce service container.
+        This is unexpected behavior and may indicate compromise.
+      condition: >
+        spawned_process
+        and container
+        and container.image.repository contains "ecommerce-repo"
+        and proc.name in (shell_binaries)
+        and not proc.pname in (known_shell_spawn_parents)
+      output: >
+        Shell spawned in ecommerce container
+        (user=%user.name pod=%k8s.pod.name ns=%k8s.ns.name
+         image=%container.image.repository:%container.image.tag
+         cmd=%proc.cmdline parent=%proc.pname)
+      priority: CRITICAL
+      tags: [ecommerce, shell, mitre_execution]
+
+    # ── Rule: Unexpected outbound connection from core service ───────────────
+    # Core services should ONLY connect to known internal services.
+    # Any unexpected external connection = potential data exfiltration.
+    - rule: Unexpected Outbound Connection from Core Service
+      desc: >
+        An ecommerce core service made an outbound connection to an
+        unexpected destination. May indicate SSRF or C2 communication.
+      condition: >
+        outbound
+        and container
+        and container.image.repository contains "ecommerce-repo"
+        and not (fd.sip.name in (allowed_internal_hosts))
+        and not fd.rport in (53, 443, 80)
+        and not proc.name in (known_network_clients)
+      output: >
+        Unexpected outbound connection
+        (pod=%k8s.pod.name ns=%k8s.ns.name
+         src=%fd.lip:%fd.lport dst=%fd.rip:%fd.rport
+         proc=%proc.name image=%container.image.repository)
+      priority: WARNING
+      tags: [ecommerce, network, mitre_exfiltration]
+
+    # ── Rule: Write to /etc or /root in ecommerce container ─────────────────
+    - rule: Sensitive File Write in Ecommerce Container
+      desc: An ecommerce service wrote to a sensitive filesystem path.
+      condition: >
+        open_write
+        and container
+        and container.image.repository contains "ecommerce-repo"
+        and (fd.name startswith /etc or fd.name startswith /root
+             or fd.name startswith /proc or fd.name startswith /sys)
+        and not proc.name in (exempt_write_processes)
+      output: >
+        Sensitive path write detected
+        (pod=%k8s.pod.name ns=%k8s.ns.name
+         file=%fd.name proc=%proc.name image=%container.image.repository)
+      priority: ERROR
+      tags: [ecommerce, filesystem, mitre_persistence]
+
+    # ── Rule: Privilege escalation attempt ──────────────────────────────────
+    - rule: Privilege Escalation in Ecommerce Container
+      desc: A process in an ecommerce container attempted privilege escalation.
+      condition: >
+        container
+        and container.image.repository contains "ecommerce-repo"
+        and (evt.type in (setuid, setgid)
+             and user.uid != 0
+             and proc.uid != 0)
+      output: >
+        Privilege escalation attempt
+        (pod=%k8s.pod.name ns=%k8s.ns.name
+         proc=%proc.name uid=%user.uid image=%container.image.repository)
+      priority: CRITICAL
+      tags: [ecommerce, privilege_escalation, mitre_privilege_escalation]
+
+    # ── Rule: kubectl exec into ecommerce pod ───────────────────────────────
+    - rule: K8s Exec into Ecommerce Pod
+      desc: >
+        Someone ran kubectl exec into a production ecommerce pod.
+        This should NEVER happen in production without change ticket.
+      condition: >
+        ka.verb=create
+        and ka.target.resource=pods/exec
+        and ka.target.namespace in (apps-core, apps-public, apps-async)
+      output: >
+        kubectl exec into production pod
+        (user=%ka.user.name pod=%ka.target.name ns=%ka.target.namespace
+         container=%ka.req.container.name)
+      priority: CRITICAL
+      source: k8s_audit
+      tags: [ecommerce, exec, mitre_lateral_movement]
+
+# Falco Sidekick to route alerts to PagerDuty / Slack
+falcosidekick:
+  enabled: true
+  config:
+    slack:
+      webhookurl: ""       # Set via External Secret: falco-sidekick-slack
+      minimumpriority: "warning"
+      channel: "#platform-alerts"
+      footer: "Falco Runtime Security | ecommerce-gke"
+
+    pagerduty:
+      routingkey: ""       # Set via External Secret: falco-sidekick-pd
+      minimumpriority: "critical"
+
+  # Falcosidekick UI for alert browsing
+  webui:
+    enabled: true
+    replicaCount: 2

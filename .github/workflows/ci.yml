@@ -330,6 +330,22 @@ jobs:
             # Sign image with Cosign (keyless OIDC)
             cosign sign --yes "$FULL_IMAGE"
             echo "✅ Signed $FULL_IMAGE"
+
+            # Generate SBOM with Syft and attest it to the image
+            echo "▶ Generating SBOM for $NAME"
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              anchore/syft:latest \
+              "$FULL_IMAGE" \
+              -o spdx-json \
+              --file "/tmp/${NAME}-sbom.spdx.json"
+
+            # Attest SBOM to the image (creates a verifiable OCI attestation)
+            cosign attest --yes \
+              --predicate "/tmp/${NAME}-sbom.spdx.json" \
+              --type spdxjson \
+              "$FULL_IMAGE"
+            echo "✅ SBOM attested for $FULL_IMAGE"
           done
 
       - name: Trivy Container Scan

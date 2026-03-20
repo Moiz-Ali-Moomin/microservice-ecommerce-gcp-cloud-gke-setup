@@ -1,0 +1,56 @@
+# argocd/apps/falco-app.yaml
+#
+# ArgoCD Application: Falco Runtime Security
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: falco
+  namespace: platform-argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"  # Deploy after namespaces and Istio
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+
+  source:
+    repoURL: https://falcosecurity.github.io/charts
+    chart: falco
+    targetRevision: "4.7.2"
+    helm:
+      valuesFiles:
+        - values.yaml
+      # Override with our custom values from Git
+      parameters: []
+
+  # Override with our infra/security/falco-values.yaml
+  # Use a separate source to pull Helm values from the Git repo
+  sources:
+    - repoURL: https://falcosecurity.github.io/charts
+      chart: falco
+      targetRevision: "4.7.2"
+      helm:
+        valueFiles:
+          - $values/infra/security/falco-values.yaml
+    - repoURL: https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup.git
+      targetRevision: HEAD
+      ref: values
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: platform-security
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

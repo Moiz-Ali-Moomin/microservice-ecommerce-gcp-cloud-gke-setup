@@ -1,0 +1,32 @@
+# infra/chaos/network-delay-auth-service.yaml
+#
+# Chaos Mesh Experiment: Network Delay — auth-service
+# ─────────────────────────────────────────────────────────────────────────────
+# Tests: Istio retry policies, circuit-breaker response, JWT cache effectiveness
+# Expected outcome: api-gateway falls back gracefully; cached auth tokens still work
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: auth-service-network-delay
+  namespace: ecommerce
+  labels:
+    chaos.mesh/type: network-delay
+    chaos.mesh/service: auth-service
+    chaos.mesh/severity: moderate
+spec:
+  action: delay
+  mode: all          # Apply to all auth-service pods
+  selector:
+    namespaces:
+      - ecommerce
+    labelSelectors:
+      app: auth-service
+  delay:
+    latency: "200ms"
+    correlation: "80"  # Correlate delays for realistic burst simulation
+    jitter: "50ms"
+  duration: "10m"
+  direction: both    # Inject delay on both inbound and outbound connections
+  scheduler:
+    cron: "0 3 * * 3"  # Wednesday 03:00 UTC

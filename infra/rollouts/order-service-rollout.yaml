@@ -17,13 +17,41 @@ spec:
             canarySubsetName: canary
             stableSubsetName: stable
       # Progressive rollout steps
+      # Analysis template gates each promotion step
+      analysis:
+        templates:
+          - templateName: order-service-canary-analysis
+        startingStep: 2   # begin analysis after first traffic shift
+        args:
+          - name: stable-hash
+            valueFrom:
+              podTemplateHashValue: Stable
+          - name: canary-hash
+            valueFrom:
+              podTemplateHashValue: Latest
+
       steps:
+      # 5% canary — fast smoke test
       - setWeight: 5
-      - pause: {duration: 5m} # Wait 5m to analyze Prometheus metrics via AnalysisRun
+      - pause: {duration: 3m}
+      # Analysis gates error rate + latency before promoting
+      - analysis:
+          templates:
+            - templateName: order-service-canary-analysis
+      # 20% canary — validate at scale
       - setWeight: 20
-      - pause: {duration: 10m}
+      - pause: {duration: 5m}
+      - analysis:
+          templates:
+            - templateName: order-service-canary-analysis
+      # 50% canary — production parity check
       - setWeight: 50
       - pause: {duration: 5m}
+      - analysis:
+          templates:
+            - templateName: order-service-canary-analysis
+      # 100% — promote only if all gates pass
+      - setWeight: 100
   revisionHistoryLimit: 2
   selector:
     matchLabels:

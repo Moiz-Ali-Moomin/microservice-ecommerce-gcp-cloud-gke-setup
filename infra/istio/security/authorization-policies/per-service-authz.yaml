@@ -1,0 +1,380 @@
+# infra/istio/security/authorization-policies/per-service-authz.yaml
+#
+# Per-Service SPIFFE-principal AuthorizationPolicies
+# ─────────────────────────────────────────────────────────────────────────────
+# Replaces the over-broad namespace-level trust in ecommerce-authz.yaml.
+# Every service only accepts connections from its EXACT known callers,
+# identified by their Kubernetes Service Account (SPIFFE URI).
+#
+# Pattern:  cluster.local/ns/<namespace>/sa/<service-account-name>
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── 1. order-service ─────────────────────────────────────────────────────────
+# Accepts traffic from: api-gateway (user checkout), cart-service (order init)
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: order-service-authz
+  namespace: apps-core
+spec:
+  selector:
+    matchLabels:
+      app: order-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/apps-public/sa/api-gateway-sa"
+              - "cluster.local/ns/apps-core/sa/cart-service-sa"
+      to:
+        - operation:
+            methods: ["POST", "GET", "PUT"]
+            ports: ["8080"]
+---
+# ── 2. product-service ───────────────────────────────────────────────────────
+# Accepts traffic from: api-gateway, storefront-service, cart-service
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: product-service-authz
+  namespace: apps-core
+spec:
+  selector:
+    matchLabels:
+      app: product-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/apps-public/sa/api-gateway-sa"
+              - "cluster.local/ns/apps-public/sa/storefront-service-sa"
+              - "cluster.local/ns/apps-core/sa/cart-service-sa"
+              - "cluster.local/ns/apps-core/sa/offer-service-sa"
+              - "cluster.local/ns/platform-observability/sa/prometheus-sa"
+      to:
+        - operation:
+            methods: ["GET", "POST", "PUT", "DELETE"]
+            ports: ["8080"]
+---
+# ── 3. cart-service ──────────────────────────────────────────────────────────
+# Accepts traffic from: api-gateway, storefront-service
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: cart-service-authz
+  namespace: apps-core
+spec:
+  selector:
+    matchLabels:
+      app: cart-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/apps-public/sa/api-gateway-sa"
+              - "cluster.local/ns/apps-public/sa/storefront-service-sa"
+      to:
+        - operation:
+            methods: ["GET", "POST", "PUT", "DELETE"]
+            ports: ["8080"]
+---
+# ── 4. auth-service ──────────────────────────────────────────────────────────
+# Accepts traffic from: api-gateway ONLY (JWT issuance is a privileged operation)
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: auth-service-authz
+  namespace: apps-core
+spec:
+  selector:
+    matchLabels:
+      app: auth-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/apps-public/sa/api-gateway-sa"
+              - "cluster.local/ns/apps-public/sa/storefront-service-sa"
+      to:
+        - operation:
+            methods: ["POST", "GET"]
+            ports: ["8080"]
+---
+# ── 5. user-service ──────────────────────────────────────────────────────────
+# Accepts traffic from: api-gateway, auth-service, notification-service, admin-backoffice
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: user-service-authz
+  namespace: apps-core
+spec:
+  selector:
+    matchLabels:
+      app: user-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/apps-public/sa/api-gateway-sa"
+              - "cluster.local/ns/apps-core/sa/auth-service-sa"
+              - "cluster.local/ns/apps-async/sa/notification-service-sa"
+              - "cluster.local/ns/apps-core/sa/admin-backoffice-service-sa"
+      to:
+        - operation:
+            methods: ["GET", "POST", "PUT", "DELETE"]
+            ports: ["8080"]
+---
+# ── 6. notification-service ──────────────────────────────────────────────────
+# Accepts traffic from: order-service (order-placed events), user-service
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: notification-service-authz
+  namespace: apps-async
+spec:
+  selector:
+    matchLabels:
+      app: notification-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/apps-core/sa/order-service-sa"
+              - "cluster.local/ns/apps-core/sa/user-service-sa"
+              - "cluster.local/ns/kafka/sa/strimzi-cluster-operator-sa"
+      to:
+        - operation:
+            ports: ["8080"]
+---
+# ── 7. analytics-ingest-service ──────────────────────────────────────────────
+# Accepts traffic from: api-gateway (event ingestion endpoint), Kafka bridge
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: analytics-ingest-service-authz
+  namespace: apps-async
+spec:
+  selector:
+    matchLabels:
+      app: analytics-ingest-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/apps-public/sa/api-gateway-sa"
+              - "cluster.local/ns/kafka/sa/strimzi-cluster-operator-sa"
+      to:
+        - operation:
+            ports: ["8080"]
+---
+# ── 8. offer-service ─────────────────────────────────────────────────────────
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: offer-service-authz
+  namespace: apps-core
+spec:
+  selector:
+    matchLabels:
+      app: offer-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/apps-public/sa/api-gateway-sa"
+              - "cluster.local/ns/apps-core/sa/product-service-sa"
+              - "cluster.local/ns/apps-public/sa/storefront-service-sa"
+      to:
+        - operation:
+            methods: ["GET", "POST"]
+            ports: ["8080"]
+---
+# ── 9. reporting-service ─────────────────────────────────────────────────────
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: reporting-service-authz
+  namespace: apps-async
+spec:
+  selector:
+    matchLabels:
+      app: reporting-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/apps-core/sa/admin-backoffice-service-sa"
+              - "cluster.local/ns/apps-public/sa/api-gateway-sa"
+      to:
+        - operation:
+            methods: ["GET"]
+            ports: ["8080"]
+---
+# ── 10. feature-flag-service ─────────────────────────────────────────────────
+# Widely consumed — allow all application namespaces but still principal-pinned
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: feature-flag-service-authz
+  namespace: apps-core
+spec:
+  selector:
+    matchLabels:
+      app: feature-flag-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces:
+              - "apps-core"
+              - "apps-public"
+              - "apps-async"
+      to:
+        - operation:
+            methods: ["GET"]
+            ports: ["8080"]
+---
+# ── 11. audit-service ────────────────────────────────────────────────────────
+# Write-only from all services; read only from admin-backoffice
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: audit-service-authz
+  namespace: apps-async
+spec:
+  selector:
+    matchLabels:
+      app: audit-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces: ["apps-core", "apps-public"]
+      to:
+        - operation:
+            methods: ["POST"]
+            ports: ["8080"]
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/apps-core/sa/admin-backoffice-service-sa"
+      to:
+        - operation:
+            methods: ["GET"]
+            ports: ["8080"]
+---
+# ── 12. attribution-service ──────────────────────────────────────────────────
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: attribution-service-authz
+  namespace: apps-async
+spec:
+  selector:
+    matchLabels:
+      app: attribution-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/apps-public/sa/api-gateway-sa"
+              - "cluster.local/ns/apps-async/sa/analytics-ingest-service-sa"
+      to:
+        - operation:
+            ports: ["8080"]
+---
+# ── 13. conversion-webhook ───────────────────────────────────────────────────
+# External webhook receiver — only ingress gateway
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: conversion-webhook-authz
+  namespace: apps-async
+spec:
+  selector:
+    matchLabels:
+      app: conversion-webhook
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"
+      to:
+        - operation:
+            methods: ["POST"]
+            ports: ["8080"]
+---
+# ── 14. redirect-service ─────────────────────────────────────────────────────
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: redirect-service-authz
+  namespace: apps-public
+spec:
+  selector:
+    matchLabels:
+      app: redirect-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"
+      to:
+        - operation:
+            methods: ["GET"]
+            ports: ["8080"]
+---
+# ── 15. storefront-service ───────────────────────────────────────────────────
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: storefront-service-authz
+  namespace: apps-public
+spec:
+  selector:
+    matchLabels:
+      app: storefront-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"
+      to:
+        - operation:
+            methods: ["GET", "POST"]
+            ports: ["8080"]
+---
+# ── 16. admin-backoffice-service ─────────────────────────────────────────────
+# Restricted: only ingress gateway + direct tool access; requires method enforcement
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: admin-backoffice-authz
+  namespace: apps-core
+spec:
+  selector:
+    matchLabels:
+      app: admin-backoffice-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"
+      to:
+        - operation:
+            methods: ["GET", "POST", "PUT", "DELETE"]
+            ports: ["8080"]

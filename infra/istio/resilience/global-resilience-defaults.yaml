@@ -1,0 +1,136 @@
+# infra/istio/resilience/global-resilience-defaults.yaml
+#
+# Platform-wide resilience defaults applied to ALL services.
+# ─────────────────────────────────────────────────────────────────────────────
+# Design:
+#   • One DestinationRule per namespace sets outlier detection + connection pool
+#     limits for every host in that namespace.
+#   • One VirtualService "catch-all" sets retry / timeout defaults.
+#   • Per-service overrides (order-service-dr.yaml, etc.) can still override.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── apps-core default DestinationRule ────────────────────────────────────────
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: default-resilience-apps-core
+  namespace: apps-core
+spec:
+  # Matches all hosts in the namespace
+  host: "*.apps-core.svc.cluster.local"
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 200
+        connectTimeout: 5s
+        tcpKeepalive:
+          time: 7200s
+          interval: 75s
+          probes: 10
+      http:
+        http1MaxPendingRequests: 50
+        http2MaxRequests: 500
+        maxRequestsPerConnection: 50
+        maxRetries: 3
+        idleTimeout: 90s
+        h2UpgradePolicy: UPGRADE
+    # Circuit-breaker: eject hosts that exceed error thresholds
+    outlierDetection:
+      consecutive5xxErrors: 5
+      consecutiveGatewayErrors: 3
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+      minHealthPercent: 50
+    # Enforce mTLS for all intra-namespace traffic
+    tls:
+      mode: ISTIO_MUTUAL
+---
+# ── apps-public default DestinationRule ──────────────────────────────────────
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: default-resilience-apps-public
+  namespace: apps-public
+spec:
+  host: "*.apps-public.svc.cluster.local"
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 300
+        connectTimeout: 5s
+      http:
+        http1MaxPendingRequests: 100
+        http2MaxRequests: 1000
+        maxRequestsPerConnection: 100
+        maxRetries: 3
+        idleTimeout: 90s
+    outlierDetection:
+      consecutive5xxErrors: 5
+      consecutiveGatewayErrors: 3
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+      minHealthPercent: 50
+    tls:
+      mode: ISTIO_MUTUAL
+---
+# ── apps-async default DestinationRule ───────────────────────────────────────
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: default-resilience-apps-async
+  namespace: apps-async
+spec:
+  host: "*.apps-async.svc.cluster.local"
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+        connectTimeout: 10s
+      http:
+        http1MaxPendingRequests: 50
+        http2MaxRequests: 200
+        maxRequestsPerConnection: 20
+        idleTimeout: 120s
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 60s
+      maxEjectionPercent: 30
+      minHealthPercent: 60
+    tls:
+      mode: ISTIO_MUTUAL
+
+---
+# ── Platform-wide VirtualService retry / timeout defaults ────────────────────
+#
+# Applied via EnvoyFilter at the mesh level so ALL services inherit defaults
+# unless overridden by a service-specific VirtualService.
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: global-retry-timeout-defaults
+  namespace: istio-system
+spec:
+  configPatches:
+    # Set default request timeout to 30s on all HTTP routes
+    - applyTo: HTTP_ROUTE
+      match:
+        context: SIDECAR_OUTBOUND
+      patch:
+        operation: MERGE
+        value:
+          timeout: 30s
+          retry_policy:
+            retry_on: "connect-failure,refused-stream,unavailable,cancelled,retriable-status-codes"
+            num_retries: 3
+            per_try_timeout: 8s
+            retriable_status_codes:
+              - 503
+              - 429
+            retry_host_predicate:
+              - name: envoy.retry_host_predicates.previous_hosts
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.retry.host.previous_hosts.v3.PreviousHostsPredicate
+            host_selection_retry_max_attempts: "5"

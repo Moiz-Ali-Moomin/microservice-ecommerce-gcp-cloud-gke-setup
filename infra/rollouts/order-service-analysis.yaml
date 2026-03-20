@@ -1,0 +1,104 @@
+# infra/rollouts/order-service-analysis.yaml
+#
+# AnalysisTemplate: Prometheus-gated canary promotion for order-service.
+# ─────────────────────────────────────────────────────────────────────────────
+# Gates:
+#   1. Error rate < 1% over canary pods           (5xx / total)
+#   2. P95 latency < 500ms over canary pods
+#   3. Success rate > 99%
+# Failure mode: automatic ABORT → rollback to stable
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: order-service-canary-analysis
+  namespace: ecommerce
+spec:
+  args:
+    # Injected by the Rollout at runtime (canary pod hash selector)
+    - name: stable-hash
+    - name: canary-hash
+    - name: service-name
+      value: order-service
+
+  metrics:
+    # ── 1. Error rate gate ──────────────────────────────────────────────────
+    - name: error-rate
+      interval: 60s
+      # Must pass for at least 5 consecutive minutes before promoting
+      count: 5
+      successCondition: result[0] < 0.01
+      failureLimit: 1
+      provider:
+        prometheus:
+          address: http://prometheus-operated.platform-observability:9090
+          query: |
+            sum(
+              rate(
+                istio_requests_total{
+                  destination_service_name="{{args.service-name}}",
+                  response_code=~"5.*",
+                  pod_template_hash="{{args.canary-hash}}"
+                }[5m]
+              )
+            )
+            /
+            sum(
+              rate(
+                istio_requests_total{
+                  destination_service_name="{{args.service-name}}",
+                  pod_template_hash="{{args.canary-hash}}"
+                }[5m]
+              )
+            )
+
+    # ── 2. P95 latency gate ─────────────────────────────────────────────────
+    - name: p95-latency-ms
+      interval: 60s
+      count: 5
+      # P95 must be less than 500ms (0.5s)
+      successCondition: result[0] < 0.500
+      failureLimit: 1
+      provider:
+        prometheus:
+          address: http://prometheus-operated.platform-observability:9090
+          query: |
+            histogram_quantile(0.95,
+              sum(
+                rate(
+                  istio_request_duration_milliseconds_bucket{
+                    destination_service_name="{{args.service-name}}",
+                    pod_template_hash="{{args.canary-hash}}"
+                  }[5m]
+                )
+              ) by (le)
+            ) / 1000
+
+    # ── 3. Success rate gate ────────────────────────────────────────────────
+    - name: success-rate
+      interval: 60s
+      count: 5
+      successCondition: result[0] >= 0.99
+      failureLimit: 1
+      provider:
+        prometheus:
+          address: http://prometheus-operated.platform-observability:9090
+          query: |
+            sum(
+              rate(
+                istio_requests_total{
+                  destination_service_name="{{args.service-name}}",
+                  response_code=~"2.*|3.*",
+                  pod_template_hash="{{args.canary-hash}}"
+                }[5m]
+              )
+            )
+            /
+            sum(
+              rate(
+                istio_requests_total{
+                  destination_service_name="{{args.service-name}}",
+                  pod_template_hash="{{args.canary-hash}}"
+                }[5m]
+              )
+            )

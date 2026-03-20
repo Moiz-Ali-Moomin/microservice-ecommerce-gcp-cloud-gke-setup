@@ -1,0 +1,30 @@
+# infra/chaos/cpu-stress-product-service.yaml
+#
+# Chaos Mesh Experiment: CPU Stress — product-service
+# ─────────────────────────────────────────────────────────────────────────────
+# Tests: HPA scale-out speed, p95 latency under saturation, alerting response
+# SLO check: HPA should add replicas within 90s; p95 < 500ms must hold
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: product-service-cpu-stress
+  namespace: ecommerce
+  labels:
+    chaos.mesh/type: cpu-stress
+    chaos.mesh/service: product-service
+    chaos.mesh/severity: high
+spec:
+  mode: one          # Stress only one pod
+  selector:
+    namespaces:
+      - ecommerce
+    labelSelectors:
+      app: product-service
+  stressors:
+    cpu:
+      workers: 4     # 4 CPU worker threads consuming 100% each
+      load: 80       # Target 80% CPU utilisation per worker
+  duration: "8m"
+  scheduler:
+    cron: "0 4 * * 5"  # Friday 04:00 UTC (just before weekly review)

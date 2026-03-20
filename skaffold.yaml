@@ -1,0 +1,236 @@
+# skaffold.yaml
+#
+# Skaffold — One-command local development environment
+# ─────────────────────────────────────────────────────────────────────────────
+# Usage:
+#   skaffold dev                        # hot-reload all services
+#   skaffold dev -m order-service       # hot-reload single service
+#   skaffold run                        # one-shot deploy to dev cluster
+#   skaffold delete                     # clean up dev resources
+#
+# Prerequisites:
+#   - kubectl context pointing at dev cluster (kind or GKE dev)
+#   - SKAFFOLD_DEFAULT_REPO=<your-registry> set in env
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: skaffold/v4beta11
+kind: Config
+metadata:
+  name: ecommerce-platform
+
+build:
+  local:
+    push: false          # Don't push to remote registry during dev
+    useBuildkit: true
+    concurrency: 4       # Build 4 services in parallel
+
+  # Use ko for fast, layer-efficient Go image builds (no Docker daemon needed)
+  artifacts:
+    - image: ecommerce/order-service
+      context: .
+      ko:
+        fromImage: gcr.io/distroless/static-debian12:nonroot
+        dependencies:
+          paths:
+            - services/order-service/**/*.go
+            - services/shared-lib/**/*.go
+        main: ./services/order-service/cmd/...
+        labels:
+          org.opencontainers.image.source: https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup
+
+    - image: ecommerce/product-service
+      context: .
+      ko:
+        fromImage: gcr.io/distroless/static-debian12:nonroot
+        dependencies:
+          paths:
+            - services/product-service/**/*.go
+            - services/shared-lib/**/*.go
+        main: ./services/product-service/cmd/...
+
+    - image: ecommerce/cart-service
+      context: .
+      ko:
+        fromImage: gcr.io/distroless/static-debian12:nonroot
+        dependencies:
+          paths:
+            - services/cart-service/**/*.go
+            - services/shared-lib/**/*.go
+        main: ./services/cart-service/cmd/...
+
+    - image: ecommerce/auth-service
+      context: .
+      ko:
+        fromImage: gcr.io/distroless/static-debian12:nonroot
+        dependencies:
+          paths:
+            - services/auth-service/**/*.go
+            - services/shared-lib/**/*.go
+        main: ./services/auth-service/cmd/...
+
+    - image: ecommerce/user-service
+      context: .
+      ko:
+        fromImage: gcr.io/distroless/static-debian12:nonroot
+        dependencies:
+          paths:
+            - services/user-service/**/*.go
+            - services/shared-lib/**/*.go
+        main: ./services/user-service/cmd/...
+
+    - image: ecommerce/notification-service
+      context: .
+      ko:
+        fromImage: gcr.io/distroless/static-debian12:nonroot
+        dependencies:
+          paths:
+            - services/notification-service/**/*.go
+            - services/shared-lib/**/*.go
+        main: ./services/notification-service/cmd/...
+
+    - image: ecommerce/offer-service
+      context: .
+      ko:
+        fromImage: gcr.io/distroless/static-debian12:nonroot
+        dependencies:
+          paths:
+            - services/offer-service/**/*.go
+            - services/shared-lib/**/*.go
+        main: ./services/offer-service/cmd/...
+
+    - image: ecommerce/analytics-ingest-service
+      context: .
+      ko:
+        fromImage: gcr.io/distroless/static-debian12:nonroot
+        dependencies:
+          paths:
+            - services/analytics-ingest-service/**/*.go
+            - services/shared-lib/**/*.go
+        main: ./services/analytics-ingest-service/cmd/...
+
+    - image: ecommerce/api-gateway
+      context: .
+      ko:
+        fromImage: gcr.io/distroless/static-debian12:nonroot
+        dependencies:
+          paths:
+            - services/api-gateway/**/*.go
+            - services/shared-lib/**/*.go
+        main: ./services/api-gateway/cmd/...
+
+deploy:
+  helm:
+    releases:
+      - name: order-service-dev
+        chartPath: services/order-service/helm
+        namespace: ecommerce-dev
+        createNamespace: true
+        setValueTemplates:
+          image.repository: "{{.IMAGE_REPO_ecommerce_order_service}}"
+          image.tag: "{{.IMAGE_TAG_ecommerce_order_service}}"
+          replicaCount: "1"            # Single replica in dev
+          resources.requests.cpu: 50m  # Lower resource requests for dev
+          resources.requests.memory: 128Mi
+
+      - name: product-service-dev
+        chartPath: services/product-service/helm
+        namespace: ecommerce-dev
+        createNamespace: true
+        setValueTemplates:
+          image.repository: "{{.IMAGE_REPO_ecommerce_product_service}}"
+          image.tag: "{{.IMAGE_TAG_ecommerce_product_service}}"
+          replicaCount: "1"
+
+      - name: cart-service-dev
+        chartPath: services/cart-service/helm
+        namespace: ecommerce-dev
+        createNamespace: true
+        setValueTemplates:
+          image.repository: "{{.IMAGE_REPO_ecommerce_cart_service}}"
+          image.tag: "{{.IMAGE_TAG_ecommerce_cart_service}}"
+          replicaCount: "1"
+
+      - name: auth-service-dev
+        chartPath: services/auth-service/helm
+        namespace: ecommerce-dev
+        createNamespace: true
+        setValueTemplates:
+          image.repository: "{{.IMAGE_REPO_ecommerce_auth_service}}"
+          image.tag: "{{.IMAGE_TAG_ecommerce_auth_service}}"
+          replicaCount: "1"
+
+      - name: user-service-dev
+        chartPath: services/user-service/helm
+        namespace: ecommerce-dev
+        createNamespace: true
+        setValueTemplates:
+          image.repository: "{{.IMAGE_REPO_ecommerce_user_service}}"
+          image.tag: "{{.IMAGE_TAG_ecommerce_user_service}}"
+          replicaCount: "1"
+
+      - name: api-gateway-dev
+        chartPath: services/api-gateway/helm
+        namespace: ecommerce-dev
+        createNamespace: true
+        setValueTemplates:
+          image.repository: "{{.IMAGE_REPO_ecommerce_api_gateway}}"
+          image.tag: "{{.IMAGE_TAG_ecommerce_api_gateway}}"
+          replicaCount: "1"
+
+# Named profiles for different dev scenarios
+profiles:
+  # Full stack: all services
+  - name: full
+    build:
+      artifacts:
+        - image: ecommerce/order-service
+        - image: ecommerce/product-service
+        - image: ecommerce/cart-service
+        - image: ecommerce/auth-service
+        - image: ecommerce/user-service
+        - image: ecommerce/notification-service
+        - image: ecommerce/offer-service
+        - image: ecommerce/analytics-ingest-service
+        - image: ecommerce/api-gateway
+
+  # Core only: minimal subset for feature development
+  - name: core
+    activation:
+      - env: SKAFFOLD_PROFILE=core
+    build:
+      artifacts:
+        - image: ecommerce/api-gateway
+        - image: ecommerce/auth-service
+        - image: ecommerce/order-service
+        - image: ecommerce/product-service
+        - image: ecommerce/cart-service
+
+  # Remote GKE dev cluster (push images to GAR)
+  - name: gke-dev
+    activation:
+      - env: SKAFFOLD_PROFILE=gke-dev
+    build:
+      local:
+        push: true
+      tagPolicy:
+        gitCommit:
+          variant: Tags
+
+portForward:
+  # Forward key services to localhost for local testing
+  - resourceType: service
+    resourceName: api-gateway
+    namespace: ecommerce-dev
+    port: 8080
+    localPort: 8080
+
+  - resourceType: service
+    resourceName: order-service
+    namespace: ecommerce-dev
+    port: 8080
+    localPort: 8081
+
+  - resourceType: service
+    resourceName: product-service
+    namespace: ecommerce-dev
+    port: 8080
+    localPort: 8082

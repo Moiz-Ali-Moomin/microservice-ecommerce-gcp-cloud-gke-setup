@@ -1,0 +1,33 @@
+# infra/chaos/pod-chaos-order-service.yaml
+#
+# Chaos Mesh Experiment: Random Pod Kill — order-service
+# ─────────────────────────────────────────────────────────────────────────────
+# Tests: PDB enforcement, HPA recovery, Argo Rollout stable replica handling
+# SLO: order-service availability SLO must remain > 99.9% during experiment
+# ─────────────────────────────────────────────────────────────────────────────
+# Run: kubectl apply -f infra/chaos/ -n ecommerce
+# Monitor: kubectl get podchaos -n ecommerce -w
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: order-service-pod-kill
+  namespace: ecommerce
+  labels:
+    chaos.mesh/type: pod-kill
+    chaos.mesh/service: order-service
+    chaos.mesh/severity: moderate
+spec:
+  action: pod-kill
+  mode: one          # Kill exactly one pod at a time
+  duration: "5m"     # Run for 5 minutes
+  selector:
+    namespaces:
+      - ecommerce
+    labelSelectors:
+      app: order-service
+      # Only target stable pods, not canary
+      rollouts-pod-template-hash: stable
+  scheduler:
+    # Run every day at 02:00 UTC (low traffic)
+    cron: "0 2 * * *"
