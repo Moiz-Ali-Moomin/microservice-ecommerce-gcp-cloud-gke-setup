@@ -1,62 +1,61 @@
 # syntax=docker/dockerfile:1
 
 # ============================================================================
-# DYNAMIC MULTI-SERVICE BUILDER - Production Grade
+# STAGE 1: Builder — Go workspace-aware, fully cached
 # ============================================================================
-
-# STAGE 1: Builder
-# Optimized for caching and workspace-aware Go builds
 FROM golang:1.24.0-bookworm AS builder
 
-# Set current working directory
 WORKDIR /app
 
-# ARG SERVICE_NAME is required to determine which microservice to build.
-# This must be passed via --build-arg SERVICE_NAME=<service-name>
 ARG SERVICE_NAME
+ARG BUILD_SHA=unknown
+ARG SERVICE_VERSION=unknown
 
-# Ensure SERVICE_NAME is provided
-RUN if [ -z "$SERVICE_NAME" ]; then echo "SERVICE_NAME argument is required" && exit 1; fi
+RUN if [ -z "$SERVICE_NAME" ]; then echo "❌ SERVICE_NAME build arg is required" && exit 1; fi
 
-# Configure Go environment for production binaries
 ENV CGO_ENABLED=0 \
     GOOS=linux \
     GOARCH=amd64
 
-# Copy workspace configuration files first to optimize layer caching for dependencies
+# Copy workspace files first (best cache layer for Go module downloads)
 COPY go.work go.work.sum ./
-
-# Copy all services into the container.
-# In a monorepo, services often depend on shared-lib or other modules in the workspace.
 COPY services ./services/
 
-# Download dependencies and build the specific service binary.
-# Using --mount=type=cache allows for significantly faster subsequent builds by persisting
-# Go's module and build caches.
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     cd services/${SERVICE_NAME} && \
     if [ -f ./cmd/main.go ]; then TARGET=./cmd/main.go; else TARGET=./main.go; fi && \
-    go build -ldflags="-w -s" -o /app/app ${TARGET}
+    go build \
+      -ldflags="-w -s -X main.Version=${SERVICE_VERSION} -X main.BuildSHA=${BUILD_SHA}" \
+      -o /app/app ${TARGET}
 
-# STAGE 2: Runtime
-# Minimalist, secure, non-root runtime environment
+# ============================================================================
+# STAGE 2: Runtime — Distroless non-root, minimal attack surface
+# ============================================================================
 FROM gcr.io/distroless/base-debian12:nonroot AS runtime
 
-# Labeling for traceability
+ARG BUILD_SHA=unknown
+ARG SERVICE_VERSION=unknown
+ARG SERVICE_NAME=unknown
+
 LABEL org.opencontainers.image.source="https://github.com/Moiz-Ali-Moomin/microservice-ecommerce-gcp-cloud-gke-setup"
-LABEL org.opencontainers.image.description="Cloud-Native E-Commerce Microservice"
+LABEL org.opencontainers.image.description="Cloud-Native E-Commerce Microservice: ${SERVICE_NAME}"
+LABEL org.opencontainers.image.version="${SERVICE_VERSION}"
+LABEL org.opencontainers.image.revision="${BUILD_SHA}"
+LABEL org.opencontainers.image.licenses="MIT"
 
 WORKDIR /app
 
-# Copy only the built binary from the builder stage
 COPY --from=builder /app/app /app/app
 
-# Expose the default service port
-EXPOSE 8080
-
-# Run as non-root (inherited from distroless:nonroot) for enhanced security
+# Non-root user (inherited from distroless:nonroot base — UID 65532)
 USER nonroot:nonroot
 
-# Define the entrypoint for the service
-CMD ["/app/app"]
+EXPOSE 8080
+
+# HEALTHCHECK tells the Docker engine (and docker-compose) the liveness status.
+# Kubernetes uses its own liveness/readiness probes defined in Helm values.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD ["/app/app", "-healthcheck"]
+
+ENTRYPOINT ["/app/app"]

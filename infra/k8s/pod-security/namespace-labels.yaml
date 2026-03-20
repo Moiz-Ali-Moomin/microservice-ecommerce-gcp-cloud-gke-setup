@@ -1,0 +1,22 @@
+# Enforce Kubernetes Pod Security Standards at "restricted" level on the ecommerce namespace.
+# This blocks containers running as root, with privilege escalation, or with default capabilities.
+# Docs: https://kubernetes.io/docs/concepts/security/pod-security-standards/
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ecommerce
+  labels:
+    # Enforce: non-root, no privileged containers, seccomp runtime/default
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    # Warn on policy violations (visible via kubectl)
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    # Audit policy violations to the audit log
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest
+    # ArgoCD management labels
+    app.kubernetes.io/managed-by: "argocd"
+    app.kubernetes.io/part-of: "ecommerce-platform"
+    # Network policy selector label
+    kubernetes.io/metadata.name: ecommerce

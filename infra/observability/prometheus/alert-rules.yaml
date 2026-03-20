@@ -1,7 +1,10 @@
 groups:
+  # =========================================================================
+  # Golden Signals — Four core indicators monitored across all services
+  # =========================================================================
   - name: golden_signals
     rules:
-      # 1. Error Rate (Availability/Quality)
+      # 1. Error Rate (Availability / Quality)
       - alert: HighErrorRate
         expr: |
           sum(rate(http_requests_total{status=~"5.."}[5m])) by (service)
@@ -12,26 +15,50 @@ groups:
           severity: critical
         annotations:
           summary: "High Error Rate (>5%) detected in {{ $labels.service }}"
-          description: "{{ $labels.service }} is failing 5% of requests."
+          description: "{{ $labels.service }} is failing {{ printf \"%.2f\" $value | humanizePercentage }} of requests over 2 minutes."
+          runbook: "https://wiki.internal/runbooks/high-error-rate"
+
       # 2. Latency (Performance)
       - alert: HighLatencyP95
         expr: |
-          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, service)) > 0.5
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le, service)
+          ) > 0.5
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "High Latency (P95 > 500ms) in {{ $labels.service }}"
-      # 3. Saturation (Resources)
+          description: "95th percentile latency is {{ $value | humanizeDuration }} in {{ $labels.service }}."
+          runbook: "https://wiki.internal/runbooks/high-latency"
+
+      # 3. Saturation (CPU)
       - alert: HighCpuUsage
         expr: |
-          sum(rate(container_cpu_usage_seconds_total[5m])) by (pod) > 0.8
+          sum(rate(container_cpu_usage_seconds_total{container!=""}[5m])) by (pod, namespace)
+          /
+          sum(kube_pod_container_resource_limits{resource="cpu"}) by (pod, namespace) > 0.85
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "Pod {{ $labels.pod }} CPU usage > 80%"
-      # 4. Availability (Blackbox)
+          summary: "Pod {{ $labels.pod }} CPU usage > 85%"
+          description: "Pod {{ $labels.pod }} in {{ $labels.namespace }} is using {{ $value | humanizePercentage }} of its CPU limit."
+
+      # 4. Memory Saturation
+      - alert: HighMemoryUsage
+        expr: |
+          sum(container_memory_working_set_bytes{container!=""}) by (pod, namespace)
+          /
+          sum(kube_pod_container_resource_limits{resource="memory"}) by (pod, namespace) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod {{ $labels.pod }} memory usage > 85%"
+          description: "Pod {{ $labels.pod }} in {{ $labels.namespace }} is using {{ $value | humanizePercentage }} of its memory limit."
+
+      # 5. Endpoint Availability (Blackbox Probe)
       - alert: EndpointDown
         expr: probe_success == 0
         for: 1m
@@ -39,3 +66,103 @@ groups:
           severity: critical
         annotations:
           summary: "Endpoint {{ $labels.instance }} is DOWN"
+          description: "Blackbox probe has been failing for > 1 minute on {{ $labels.instance }}."
+          runbook: "https://wiki.internal/runbooks/endpoint-down"
+
+  # =========================================================================
+  # SLO Burn-Rate Alerts — catches incidents 14× faster than thresholds
+  # SLO targets: Availability 99.9%, Latency P95 < 500ms
+  # =========================================================================
+  - name: slo_burn_rate
+    rules:
+      # Fast-burn: consuming 2% of monthly error budget in 1 hour = page immediately
+      - alert: AvailabilitySLOFastBurn
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[1h])) by (service)
+            /
+            sum(rate(http_requests_total[1h])) by (service)
+          ) > (14.4 * 0.001)
+        for: 2m
+        labels:
+          severity: critical
+          slo: availability
+          burn_rate: fast
+        annotations:
+          summary: "SLO: Availability fast-burn alert for {{ $labels.service }}"
+          description: |
+            {{ $labels.service }} is burning its availability error budget at a 14.4× rate.
+            At this rate, the monthly 99.9% SLO will be breached in ~5 days.
+          runbook: "https://wiki.internal/runbooks/slo-fast-burn"
+
+      # Slow-burn: consuming 5% of monthly error budget in 6 hours = ticket
+      - alert: AvailabilitySLOSlowBurn
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[6h])) by (service)
+            /
+            sum(rate(http_requests_total[6h])) by (service)
+          ) > (6 * 0.001)
+        for: 15m
+        labels:
+          severity: warning
+          slo: availability
+          burn_rate: slow
+        annotations:
+          summary: "SLO: Availability slow-burn in {{ $labels.service }}"
+          description: |
+            {{ $labels.service }} is burning its availability SLO budget at a 6× rate over a 6h window.
+          runbook: "https://wiki.internal/runbooks/slo-slow-burn"
+
+      # Latency fast-burn: 95th percentile > 500ms budget burn
+      - alert: LatencySLOFastBurn
+        expr: |
+          (
+            sum(rate(http_request_duration_seconds_bucket{le="0.5"}[1h])) by (service)
+            /
+            sum(rate(http_request_duration_seconds_count[1h])) by (service)
+          ) < (1 - 14.4 * 0.01)
+        for: 2m
+        labels:
+          severity: critical
+          slo: latency
+          burn_rate: fast
+        annotations:
+          summary: "SLO: Latency fast-burn for {{ $labels.service }}"
+          description: "{{ $labels.service }} latency SLO error budget is burning at >14.4× rate."
+          runbook: "https://wiki.internal/runbooks/slo-latency-burn"
+
+  # =========================================================================
+  # Infrastructure Alerts
+  # =========================================================================
+  - name: infrastructure
+    rules:
+      - alert: KafkaConsumerLag
+        expr: |
+          sum(kafka_consumer_group_lag) by (topic, group) > 10000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka consumer lag > 10k on topic {{ $labels.topic }}"
+          description: "Consumer group {{ $labels.group }} has a lag of {{ $value }} on topic {{ $labels.topic }}."
+
+      - alert: PodCrashLooping
+        expr: |
+          increase(kube_pod_container_status_restarts_total[15m]) > 3
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pod {{ $labels.pod }} is crash-looping"
+          description: "Pod {{ $labels.pod }} restarted {{ $value }} times in the last 15 minutes."
+
+      - alert: PersistentVolumeAlmostFull
+        expr: |
+          (kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PV {{ $labels.persistentvolumeclaim }} is > 85% full"
+

@@ -1,20 +1,83 @@
 global:
   resolve_timeout: 5m
+
+# ============================================================================
+# Templates for rich notification messages
+# ============================================================================
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
 route:
-  group_by: ["alertname", "service"]
+  group_by: ["alertname", "service", "slo"]
   group_wait: 30s
   group_interval: 5m
-  repeat_interval: 12h
-  receiver: "default-receiver"
+  repeat_interval: 4h
+  receiver: "slack-warnings"
+
   routes:
-    - match:
-        severity: critical
-      receiver: "pagerduty-or-opsgenie"
+    # Critical / SLO fast-burn → PagerDuty (immediate page)
+    - matchers:
+        - severity = "critical"
+      receiver: "pagerduty-critical"
+      group_wait: 10s
+      repeat_interval: 30m
+      continue: true
+
+    # SLO alerts also go to dedicated Slack channel
+    - matchers:
+        - slo =~ ".+"
+      receiver: "slack-slo"
+
+    # Warnings → Slack #alerts-warning
+    - matchers:
+        - severity = "warning"
+      receiver: "slack-warnings"
+
 receivers:
-  - name: "default-receiver"
-    webhook_configs:
-      - url: "http://notification-service.ecommerce.svc.cluster.local:8080/internal/alert"
-  - name: "pagerduty-or-opsgenie"
-    # Placeholder for real integration
-    email_configs:
-      - to: "oncall@example.com"
+  # ── PagerDuty (critical + SLO fast-burn) ─────────────────────────────────
+  - name: "pagerduty-critical"
+    pagerduty_configs:
+      - routing_key: "${PAGERDUTY_ROUTING_KEY}"  # injected via K8s secret
+        send_resolved: true
+        description: '{{ template "pagerduty.default.description" . }}'
+        details:
+          firing: '{{ template "pagerduty.default.instances" .Alerts.Firing }}'
+          num_firing: '{{ .Alerts.Firing | len }}'
+          runbook: '{{ (index .Alerts.Firing 0).Annotations.runbook }}'
+
+  # ── Slack #slo-burn (SLO burn-rate alerts) ────────────────────────────────
+  - name: "slack-slo"
+    slack_configs:
+      - api_url: "${SLACK_SLO_WEBHOOK_URL}"  # injected via K8s secret
+        send_resolved: true
+        channel: "#slo-burn"
+        icon_emoji: ":fire:"
+        title: '{{ if eq .Status "firing" }}🔥 SLO Burn Rate Alert{{ else }}✅ Resolved{{ end }}'
+        text: |
+          *Service:* {{ (index .Alerts 0).Labels.service }}
+          *Burn Rate:* {{ (index .Alerts 0).Labels.burn_rate }}
+          *Description:* {{ (index .Alerts 0).Annotations.description }}
+          *Runbook:* {{ (index .Alerts 0).Annotations.runbook }}
+
+  # ── Slack #alerts-warning (general warnings) ─────────────────────────────
+  - name: "slack-warnings"
+    slack_configs:
+      - api_url: "${SLACK_WEBHOOK_URL}"  # injected via K8s secret
+        send_resolved: true
+        channel: "#alerts-warning"
+        icon_emoji: ":warning:"
+        title: '{{ if eq .Status "firing" }}⚠️ {{ .GroupLabels.alertname }}{{ else }}✅ Resolved: {{ .GroupLabels.alertname }}{{ end }}'
+        text: |
+          *Status:* {{ .Status | toUpper }}
+          {{ range .Alerts }}
+          *Service:* {{ .Labels.service }}  *Severity:* {{ .Labels.severity }}
+          *Summary:* {{ .Annotations.summary }}
+          {{ end }}
+
+inhibit_rules:
+  # Suppress warnings when the same alert fires at critical level
+  - source_matchers:
+      - severity = "critical"
+    target_matchers:
+      - severity = "warning"
+    equal: ["alertname", "service"]

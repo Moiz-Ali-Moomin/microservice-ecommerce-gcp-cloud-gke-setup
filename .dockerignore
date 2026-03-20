@@ -1,23 +1,60 @@
-# GIT
+# ============================================================
+# .dockerignore — Keeps Docker build contexts lean and fast
+# ============================================================
+
+# Version control
 .git
 .gitignore
+.gitattributes
 .github
 
-# INFRA & CONFIG
+# Infrastructure (not needed in service containers)
 infra/
 argocd/
-docker-compose.yml
-Makefile
-*.md
+terraform/
+scripts/
+resources/
 
-# LOCAL DEV
+# Documentation
+*.md
+docs/
+README*
+
+# Local development artifacts
+docker-compose.yml
+docker-compose.*.yml
+Makefile
 *.log
 tmp/
 bin/
+dist/
+.cache/
+
+# Test & coverage artifacts
+**/*_test.go
 test-reports/
 coverage.out
 lint-report.txt
+sonar-project.properties
+
+# CI/CD artifacts
+.prettierignore
+spark-values.yaml
+patch.json
+
+# Build outputs
+**/*.exe
+**/*.dll
+**/*.so
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.envrc
 
 # OS
 .DS_Store
 Thumbs.db
+ehthumbs.db

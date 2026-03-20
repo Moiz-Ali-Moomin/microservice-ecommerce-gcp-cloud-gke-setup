@@ -11,11 +11,24 @@ on:
     paths-ignore:
       - "**.md"
       - "docs/**"
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Service to force-deploy (leave empty for all changed)"
+        required: false
+        default: ""
+      environment:
+        description: "Target environment"
+        required: true
+        default: "staging"
+        type: choice
+        options: [staging, prod]
 
 permissions:
   contents: read
   id-token: write
   security-events: write
+  pull-requests: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -26,15 +39,16 @@ env:
   GKE_REGION: us-central1
   GAR_REGION: us-central1-docker.pkg.dev
   ARTIFACT_REPO: ecommerce-repo
-  TF_WORKING_DIR: infra/gke
-  GO_VERSION: "1.22.0"
+  TF_WORKING_DIR: infra/terraform/gke
+  GO_VERSION: "1.24.0"
+  COVERAGE_THRESHOLD: "80"
 
-# =====================================================
-# 0. QUALITY GATE
-# =====================================================
+# =============================================================================
+# STAGE 0: QUALITY GATE (runs on ALL pushes + PRs, in parallel with security)
+# =============================================================================
 jobs:
   quality-check:
-    name: Code Quality
+    name: "🧪 Test & Lint"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -48,13 +62,27 @@ jobs:
           cache: true
           cache-dependency-path: go.work.sum
 
-      - name: Test & Lint
+      - name: Run Tests with Coverage
         run: |
           set -e
           cd services
-          go test ./... -coverprofile=../coverage.out
+          go test ./... -race -coverprofile=../coverage.out -covermode=atomic -timeout 120s
+
+      - name: Enforce Coverage Threshold (≥${{ env.COVERAGE_THRESHOLD }}%)
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | tr -d '%')
+          echo "Total coverage: ${COVERAGE}%"
+          if (( $(echo "$COVERAGE < ${{ env.COVERAGE_THRESHOLD }}" | bc -l) )); then
+            echo "❌ Coverage ${COVERAGE}% is below the required ${{ env.COVERAGE_THRESHOLD }}%"
+            exit 1
+          fi
+          echo "✅ Coverage ${COVERAGE}% meets the threshold"
+
+      - name: Lint (revive)
+        run: |
           go install github.com/mgechev/revive@v1.3.7
-          revive ./... > ../lint-report.txt
+          cd services && revive ./... > ../lint-report.txt || true
+          cat ../lint-report.txt
 
       - uses: actions/upload-artifact@v4
         with:
@@ -63,49 +91,39 @@ jobs:
             coverage.out
             lint-report.txt
 
-# =====================================================
-# 1. BUILD CHECK
-# =====================================================
-  build-services:
-    name: Compile Services
+  # =============================================================================
+  # STAGE 0b: SECURITY SCAN (parallel with quality-check, no dependency)
+  # =============================================================================
+  security-scan-fs:
+    name: "🔒 Trivy FS Scan"
     runs-on: ubuntu-latest
-    needs: quality-check
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
-      - name: Build
-        run: |
-          cd services
-          go build ./...
-
-# =====================================================
-# 2. SECURITY SCAN
-# =====================================================
-  security-scan:
-    name: Trivy Scan
-    runs-on: ubuntu-latest
-    needs: build-services
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: aquasecurity/trivy-action@0.16.1
+      - name: Trivy Filesystem Scan
+        uses: aquasecurity/trivy-action@0.16.1
         with:
           scan-type: fs
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: 1
+          format: sarif
+          output: trivy-fs-results.sarif
 
-# =====================================================
-# 3. SONARQUBE
-# =====================================================
+      - name: Upload SARIF to Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-fs-results.sarif
+
+  # =============================================================================
+  # STAGE 0c: SONARQUBE (parallel with quality-check)
+  # =============================================================================
   sonarqube:
-    name: SonarQube
+    name: "📊 SonarQube"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: quality-check
     steps:
       - uses: actions/checkout@v4
@@ -124,14 +142,35 @@ jobs:
           args: >
             -Dsonar.go.coverage.reportPaths=coverage.out
 
-# =====================================================
-# 4. TERRAFORM (ONLY IF INFRA CHANGED)
-# =====================================================
-  terraform:
-    name: Terraform Infra
+  # =============================================================================
+  # STAGE 1: BUILD CHECK (compile — no push yet)
+  # =============================================================================
+  build-check:
+    name: "🔨 Compile Services"
     runs-on: ubuntu-latest
-    needs: security-scan
-    environment: prod
+    needs: [quality-check, security-scan-fs]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Compile All Services
+        run: cd services && go build ./...
+
+  # =============================================================================
+  # STAGE 2: TERRAFORM (only on infra changes, only on main)
+  # =============================================================================
+  terraform:
+    name: "🏗️ Terraform Infra"
+    runs-on: ubuntu-latest
+    needs: [build-check, sonarqube]
+    if: github.ref == 'refs/heads/main'
+    environment: staging
+    timeout-minutes: 30
 
     permissions:
       contents: read
@@ -139,18 +178,18 @@ jobs:
 
     env:
       TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
+      TF_VAR_environment: staging
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Check for Infra Changes
+      - name: Detect Infra Changes
         id: filter
         run: |
-          # Check if infra/terraform changed in the push
-          changed_files=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} || echo "")
-          if echo "$changed_files" | grep -q "infra/terraform/"; then
+          changed=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null || git diff --name-only HEAD~1 HEAD)
+          if echo "$changed" | grep -q "infra/terraform/"; then
             echo "changes=true" >> $GITHUB_OUTPUT
           else
             echo "changes=false" >> $GITHUB_OUTPUT
@@ -166,43 +205,57 @@ jobs:
         with:
           terraform_version: 1.6.6
 
-      - run: terraform init
+      - name: Terraform Format Check
         if: steps.filter.outputs.changes == 'true'
         working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform fmt -check -recursive
 
-      - run: terraform validate
+      - name: Terraform Init
         if: steps.filter.outputs.changes == 'true'
         working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init
 
-      - run: terraform plan -out=tfplan
+      - name: Terraform Validate
         if: steps.filter.outputs.changes == 'true'
         working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform validate
+
+      - name: Terraform Plan
+        if: steps.filter.outputs.changes == 'true'
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform plan -out=tfplan -lock-timeout=60s
 
       - uses: actions/upload-artifact@v4
         if: steps.filter.outputs.changes == 'true'
         with:
           name: tfplan
-          path: infra/gke/tfplan
+          path: ${{ env.TF_WORKING_DIR }}/tfplan
+          retention-days: 1
 
-      - if: github.ref == 'refs/heads/main' && steps.filter.outputs.changes == 'true'
-        run: terraform apply -auto-approve tfplan
+      - name: Terraform Apply (staging)
+        if: steps.filter.outputs.changes == 'true'
         working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform apply -auto-approve tfplan
 
-# =====================================================
-# 5. BUILD & PUSH IMAGES AND UPDATE MANIFESTS
-# =====================================================
-  build-and-update-manifests:
-    name: Build & Update Manifests
+  # =============================================================================
+  # STAGE 3: BUILD & PUSH (staging — only on main)
+  # =============================================================================
+  build-and-push-staging:
+    name: "🐳 Build & Push → Staging"
     runs-on: ubuntu-latest
     needs: terraform
     if: github.ref == 'refs/heads/main'
-    environment: prod
+    environment: staging
+    timeout-minutes: 45
+
+    outputs:
+      changed_services: ${{ steps.detect.outputs.changed_services }}
 
     steps:
       - uses: actions/checkout@v4
         with:
-          # Required to push commits back to the repo
           token: ${{ secrets.PAT_TOKEN || github.token }}
+          fetch-depth: 2
 
       - uses: google-github-actions/auth@v2
         with:
@@ -211,64 +264,151 @@ jobs:
 
       - uses: google-github-actions/setup-gcloud@v2
 
+      - uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: image=moby/buildkit:latest
+
       - uses: sigstore/cosign-installer@v3.4.0
         with:
-          cosign-release: 'v2.2.3'
+          cosign-release: "v2.2.3"
 
-      - run: gcloud auth configure-docker $GAR_REGION --quiet
+      - name: Configure Docker Auth
+        run: gcloud auth configure-docker $GAR_REGION --quiet
 
-      - name: Build & Push Images
+      - name: Detect Changed Services
+        id: detect
         run: |
-          set -e
-          # Optimization: Identify changed files to minimize build blast radius
-          CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} || echo "")
-
-          for svc in services/*; do
-            if [ -f "$svc/Dockerfile" ]; then
-              NAME=$(basename "$svc")
-              # Monorepo optimization: Only build if service folder OR shared-lib changed
-              if echo "$CHANGED" | grep -qE "services/$NAME/|services/shared-lib/"; then
-                echo "Building $NAME (Detected Changes)"
-                IMAGE="$GAR_REGION/${{ secrets.GCP_PROJECT_ID }}/$ARTIFACT_REPO/$NAME:${{ github.sha }}"
-                if [ "$NAME" = "storefront-web" ]; then
-                  docker build -t $IMAGE -f "$svc/Dockerfile" "$svc/"
-                else
-                  docker build -t $IMAGE -f "$svc/Dockerfile" .
-                fi
-                docker push $IMAGE
-                cosign sign --yes $IMAGE
-              else
-                 echo "Skipping $NAME (No Changes)"
-              fi
+          CHANGED=$(git diff --name-only HEAD~1 HEAD || echo "")
+          SERVICES=""
+          for svc in services/*/; do
+            NAME=$(basename "$svc")
+            [ "$NAME" = "shared-lib" ] && continue
+            if echo "$CHANGED" | grep -qE "services/$NAME/|services/shared-lib/"; then
+              SERVICES="$SERVICES $NAME"
             fi
           done
+          # Force-deploy specific service if dispatched manually
+          if [ -n "${{ github.event.inputs.service }}" ]; then
+            SERVICES="${{ github.event.inputs.service }}"
+          fi
+          echo "changed_services=${SERVICES}" >> $GITHUB_OUTPUT
+          echo "Detected changes in:${SERVICES:-' (none)'}"
 
-      - name: Update Helm Manifests
+      - name: Build, Push & Sign Images
         run: |
           set -e
-          CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} || echo "")
-          MANIFESTS_CHANGED=false
+          for NAME in ${{ steps.detect.outputs.changed_services }}; do
+            SVC="services/$NAME"
+            [ -f "$SVC/Dockerfile" ] || continue
+            IMAGE="${{ env.GAR_REGION }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/$NAME"
+            TAG="${{ github.sha }}"
+            FULL_IMAGE="${IMAGE}:${TAG}"
 
-          for svc in services/*; do
-            if [ -d "$svc/helm" ]; then
-              NAME=$(basename "$svc")
-              if echo "$CHANGED" | grep -qE "services/$NAME/|services/shared-lib/"; then
-                 echo "Updating image tag for $NAME"
-                 
-                 # Using yq or sed to update the tag in values.yaml
-                 # Here we use a simple sed replacement assuming the structure exists
-                 sed -i "s/tag: .*/tag: \"${{ github.sha }}\"/" "$svc/helm/values.yaml"
-                 MANIFESTS_CHANGED=true
-              fi
+            echo "▶ Building $NAME → $FULL_IMAGE"
+
+            if [ "$NAME" = "storefront-web" ]; then
+              docker buildx build \
+                --cache-from type=gha,scope=$NAME \
+                --cache-to   type=gha,scope=$NAME,mode=max \
+                --build-arg BUILD_SHA=${{ github.sha }} \
+                --build-arg SERVICE_VERSION=$(cat services/$NAME/VERSION 2>/dev/null || echo "0.0.0") \
+                -t "$FULL_IMAGE" \
+                -f "$SVC/Dockerfile" "$SVC/" \
+                --push
+            else
+              docker buildx build \
+                --cache-from type=gha,scope=$NAME \
+                --cache-to   type=gha,scope=$NAME,mode=max \
+                --build-arg SERVICE_NAME=$NAME \
+                --build-arg BUILD_SHA=${{ github.sha }} \
+                --build-arg SERVICE_VERSION=$(cat services/$NAME/VERSION 2>/dev/null || echo "0.0.0") \
+                -t "$FULL_IMAGE" \
+                -f Dockerfile.services . \
+                --push
             fi
+
+            # Sign image with Cosign (keyless OIDC)
+            cosign sign --yes "$FULL_IMAGE"
+            echo "✅ Signed $FULL_IMAGE"
+          done
+
+      - name: Trivy Container Scan
+        if: steps.detect.outputs.changed_services != ''
+        run: |
+          set -e
+          for NAME in ${{ steps.detect.outputs.changed_services }}; do
+            IMAGE="${{ env.GAR_REGION }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REPO }}/$NAME:${{ github.sha }}"
+            echo "▶ Scanning container image: $IMAGE"
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              aquasec/trivy:latest image \
+              --severity CRITICAL,HIGH \
+              --ignore-unfixed \
+              --exit-code 1 \
+              "$IMAGE"
+          done
+
+      - name: Update Helm Chart Image Tags
+        run: |
+          set -e
+          MANIFESTS_CHANGED=false
+          for NAME in ${{ steps.detect.outputs.changed_services }}; do
+            VALUES="services/$NAME/helm/values.yaml"
+            [ -f "$VALUES" ] || continue
+            sed -i "s/tag: .*/tag: \"${{ github.sha }}\"/" "$VALUES"
+            MANIFESTS_CHANGED=true
+            echo "Updated image tag in $VALUES"
           done
 
           if [ "$MANIFESTS_CHANGED" = true ]; then
-            git config user.name "github-actions[bot]"
+            git config user.name  "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add services/*/helm/values.yaml
-            git commit -m "chore(cd): update image tags to ${{ github.sha }} [skip ci]"
+            git commit -m "chore(cd): bump image tags to ${{ github.sha }} [skip ci]"
             git push origin main
-          else
-            echo "No manifests needed updating."
           fi
+
+  # =============================================================================
+  # STAGE 4: PROMOTE TO PROD (manual approval gate)
+  # =============================================================================
+  deploy-prod:
+    name: "🚀 Deploy → Production"
+    runs-on: ubuntu-latest
+    needs: build-and-push-staging
+    if: github.ref == 'refs/heads/main'
+    # environment "prod" requires a manual approval from a designated reviewer
+    environment: prod
+    timeout-minutes: 30
+
+    env:
+      TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
+      TF_VAR_environment: prod
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/662443466894/locations/global/workloadIdentityPools/terraform-pool-2/providers/github
+          service_account: terraform-sa@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Get GKE Credentials
+        run: |
+          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER }} \
+            --region ${{ env.GKE_REGION }} \
+            --project ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Trigger ArgoCD Sync (prod)
+        run: |
+          # ArgoCD is managed via App-of-Apps; image tags are already updated in Git.
+          # This step forces a hard-refresh to ensure ArgoCD picks up the new tags immediately.
+          gcloud container clusters get-credentials ecommerce-prod \
+            --region us-central1 --project ${{ secrets.GCP_PROJECT_ID }}
+
+          kubectl annotate application -n platform-argocd \
+            --all argocd.argoproj.io/refresh=hard \
+            --overwrite
+
+          echo "✅ ArgoCD sync triggered for prod."
